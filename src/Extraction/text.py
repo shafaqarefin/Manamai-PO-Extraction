@@ -1,6 +1,5 @@
 import pdfplumber
-
-from utils.pdfPath import get_pdf_path
+import re
 
 
 def extract_text(pdf_path):
@@ -17,6 +16,20 @@ def extract_text(pdf_path):
     return "\n".join(text)
 
 
-# Get the entire PDF text
-pdf_path = get_pdf_path('Input_Sample.pdf', 'data')
-print(extract_text(pdf_path))
+def extractNonTableValues(text: str):
+    non_table_fields = ["Order No",
+                        "Country",
+                        "Product Description",
+                        "Season",
+                        "Type of Construction",
+                        "No. of Pieces",
+                        "Sales Mode",]
+    extracted_non_table = {}
+
+    for field in non_table_fields:
+        # Capture only the first non-whitespace sequence immediately after colon
+        pattern = rf"{re.escape(field)}\s*:\s*(\S+)"
+        match = re.search(pattern, text)
+        if match:
+            extracted_non_table[field] = match.group(1)
+    return extracted_non_table
