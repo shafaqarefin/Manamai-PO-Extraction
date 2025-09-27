@@ -73,7 +73,7 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
     return {k: v for k, v in extracted.items() if v}
 
 
-def createExcelObject(extracted: dict):
+def createNonTableObject(extracted: dict):
     excelObjects = []
 
     # Loop over all rows in Planning Markets
@@ -97,8 +97,9 @@ def findInvoicePricebyCountry(country: str, extracted: dict):
 
 
 if __name__ == "__main__":
-    path = get_pdf_path("Input_Sample.pdf", "data")
+    path = get_pdf_path(
+        "416605_PurchaseOrder_Supplier_20250915_020609.pdf", "data")
     result = extract_table_rows(path, page="1")
-    print(createExcelObject(result))
+    print(createNonTableObject(result))
     # for k, v in result.items():
     #     print(f"{k}: {v}")
