@@ -14,13 +14,8 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
                 df.iat[r_idx, c_idx] = val.strip()
 
     fields_to_extract = {
-        "Order No",
         "Country",
-        "Product Description",
-        "Season",
-        "Type of Construction",
-        "No. of Pieces",
-        "Sales Mode",
+        # "No of Pieces",
         "Time of Delivery",
         "Invoice Average Price",
         "Planning Markets"
@@ -66,6 +61,12 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
                             extracted["Planning Markets"].append(
                                 [first_word])
 
+                    # Handle Invoice Average Price
+                    elif val == "Invoice Average Price":
+                        # take only the first value (e.g., '1.80')
+                        first_part = below.strip().split()[0]
+                        extracted["Invoice Average Price"].append(first_part)
+
                     # Other fields
                     else:
                         extracted[val].append(below)
@@ -73,8 +74,9 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
     return {k: v for k, v in extracted.items() if v}
 
 
-def createNonTableObject(extracted: dict):
+def extractTableValues(pdf_path: str):
     excelObjects = []
+    extracted = extract_table_rows(pdf_path)
 
     # Loop over all rows in Planning Markets
     for idx, countries in enumerate(extracted['Planning Markets']):
@@ -84,6 +86,7 @@ def createNonTableObject(extracted: dict):
             excelObject['Time of Delivery'] = extracted['Time of Delivery'][idx]
             excelObject['Invoice Average Price'] = findInvoicePricebyCountry(
                 country, extracted)
+
             excelObjects.append(excelObject)
 
     return excelObjects
@@ -100,6 +103,6 @@ if __name__ == "__main__":
     path = get_pdf_path(
         "416605_PurchaseOrder_Supplier_20250915_020609.pdf", "data")
     result = extract_table_rows(path, page="1")
-    print(createNonTableObject(result))
+    print(extractTableValues(path))
     # for k, v in result.items():
     #     print(f"{k}: {v}")
