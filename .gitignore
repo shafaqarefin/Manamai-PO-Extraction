@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Ignore Excel files
+*.xls
+*.xlsx
+
+# Ignore XML files
+*.xml
