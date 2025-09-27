@@ -2,7 +2,7 @@ import pdfplumber
 import re
 
 
-def extract_text(pdf_path):
+def extract_text(pdf_path: str):
     """Return all pages joined into one string."""
     text = []
 
@@ -22,13 +22,13 @@ def extractNonTableValues(text: str):
                         "Product Description",
                         "Season",
                         "Type of Construction",
-                        "No. of Pieces",
+                        "No of Pieces",
                         "Sales Mode",]
     extracted_non_table = {}
 
     for field in non_table_fields:
         # Capture only the first non-whitespace sequence immediately after colon
-        pattern = rf"{re.escape(field)}\s*:\s*(\S+)"
+        pattern = rf"{re.escape(field)}:\s*(.+?)(?=\n|$)"
         match = re.search(pattern, text)
         if match:
             extracted_non_table[field] = match.group(1)
