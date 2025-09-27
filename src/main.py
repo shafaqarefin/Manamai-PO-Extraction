@@ -6,7 +6,7 @@ from src.Extraction.pipeline import extract_PO_data
 def main():
     base = Path(__file__).resolve().parent.parent
     data_dir = base / "data"
-
+    print('Creating Excel Files...')
     for file_path in data_dir.iterdir():
         if not file_path.is_file() or file_path.suffix.lower() != ".pdf":
             continue
