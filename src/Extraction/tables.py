@@ -1,6 +1,6 @@
 from camelot.io import read_pdf
-from numpy import extract
 from utils.pdfPath import get_pdf_path
+from utils.formatDate import formatDate
 
 
 def extract_table_rows(pdf_path: str, page: str = "1"):
@@ -44,6 +44,11 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
                         break
 
                     # Handle Country normally
+                    if val == "Time of Delivery":
+                        formatted_date = formatDate(below)
+                        extracted["Time of Delivery"].append(formatted_date)
+                        continue
+
                     if val == "Country":
                         group = [p.strip() for p in below.split(",")]
                         extracted["Country"].append(group)
@@ -103,6 +108,6 @@ if __name__ == "__main__":
     path = get_pdf_path(
         "416605_PurchaseOrder_Supplier_20250915_020609.pdf", "data")
     result = extract_table_rows(path, page="1")
-    print(extractTableValues(path))
-    # for k, v in result.items():
-    #     print(f"{k}: {v}")
+    # print(extractTableValues(path))
+    for k, v in result.items():
+        print(f"{k}: {v}")
