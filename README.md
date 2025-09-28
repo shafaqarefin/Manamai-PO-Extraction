@@ -21,7 +21,6 @@ Key libraries (all declared in `pyproject.toml`):
 - `pandas`
 - `openpyxl`
 - `python-dateutil`
-- any other project-specific packages you added.
 
 ---
 
@@ -51,12 +50,12 @@ git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git
 ```bash
 uv pip install -r pyproject.toml
 ```
-**Run command**
+**Run command to start excel creation for any pdf in the data folder**
 ```bash
 uv run -m src.main
 ```
-**Run command**
-*Check newly created output folder which contains all excel files saved using the first id of each pdf in data folder*
+**Check newly created output folder which contains all excel files saved using the first id of each pdf in data folder**
+
 
 
 
