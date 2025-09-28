@@ -35,3 +35,12 @@ Follow these steps exactly to get the project running from scratch.
 **macOS / Linux**
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+```
+**Windows Inside Poweeshell**
+```bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+
+
