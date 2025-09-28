@@ -5,7 +5,7 @@ A Python project for extracting and normalizing structured data from purchase-or
 ---
 
 ## 🚀 Features
-- Parse PDF tables using **Camelot** (`flavor="stream"`).
+- Parse PDF tables using **Camelot**.
 - Normalize delivery dates to `YYYY-MM-DD`.
 - Extract fields such as **Country**, **Planning Markets**, **Invoice Average Price**, etc.
 - Output clean, analysis-ready Excel/CSV data.
