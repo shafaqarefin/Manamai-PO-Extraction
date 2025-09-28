@@ -41,13 +41,18 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ```
 
 ### 2.Install Packages
-**In your current directory clone project**
+**In your current project directory clone project**
 ```bash
 git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git
 ```
 **Navigate to your current directory**
 ```bash
 cd project_name
+```
+**If any other virtual enviroments are active deactivate them and remove them**
+```bash
+deactivate
+rm -rf .venv
 ```
 **Run this command to install dependencies**
 ```bash
