@@ -44,7 +44,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 **Open bash terminal.Create and navigate to your current directory**
 ```bash
-mkdir myproject && cd project_name
+mkdir project_name && cd project_name
 ```
 **In your current project directory clone project**
 ```bash
