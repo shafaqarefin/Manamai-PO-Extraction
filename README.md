@@ -34,7 +34,6 @@ Follow these steps exactly to get the project running from scratch.
 **macOS / Linux**
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
 ```
 **Windows Inside Powershell with admin pass**
 ```bash
@@ -46,15 +45,20 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ```bash
 git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git
 ```
+**Navigate to your current directory**
+```bash
+cd project_name
+```
 **Run this command to install dependencies**
 ```bash
-uv pip install -r pyproject.toml
+uv sync
 ```
-**Run command to start excel creation for any pdf in the data folder**
+**After successful installation,run command to start excel creation for any pdf in the data folder**
 ```bash
 uv run -m src.main
 ```
 **Check newly created output folder which contains all excel files saved using the first id of each pdf in data folder**
+
 
 
 
