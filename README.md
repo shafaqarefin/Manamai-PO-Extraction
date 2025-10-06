@@ -41,15 +41,17 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ```
 
 ### 2.Install Packages
+
+**Open bash terminal.Create and navigate to your current directory**
+```bash
+mkdir project_name && cd project_name
+```
 **In your current project directory clone project**
 ```bash
-git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git
+git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git .
+
 ```
-**Navigate to your current directory**
-```bash
-cd project_name
-```
-**If any other virtual enviroments are active deactivate them and remove them**
+**IF AND ONLY IF any other virtual enviroments are active deactivate them and remove them**
 ```bash
 deactivate
 rm -rf .venv
@@ -58,11 +60,11 @@ rm -rf .venv
 ```bash
 uv sync
 ```
-**After successful installation,run command to start excel creation for any pdf in the data folder**
+**After successful installation,run command in current terminal to start excel creation for any pdf in the data folder**
 ```bash
 uv run -m src.main
 ```
-**Check newly created output folder which contains all excel files saved using the first id of each pdf in data folder**
+**Check newly created output folder in root directory which contains all excel files saved using the first id of each pdf in data folder**
 
 
 
