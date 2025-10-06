@@ -1,5 +1,6 @@
 from camelot.io import read_pdf
-from utils.formatDate import formatDate
+
+from src.Preprocessing.preprocess import *
 
 FIELDS_TO_EXTRACT = {
     "Country",
@@ -22,32 +23,15 @@ def should_stop(cell: str) -> bool:
     )
 
 
-def clean_dataframe(df):
-    """Strip whitespace from all string cells in a dataframe."""
-    for r_idx, row in df.iterrows():
-        for c_idx, val in row.items():
-            if isinstance(val, str):
-                df.iat[r_idx, c_idx] = val.strip()
-    return df
-
-
-def process_country(cell_value: str):
-    return [p.strip() for p in cell_value.split(",")]
-
-
-def process_time_of_delivery(cell_value: str):
-    return formatDate(cell_value)
-
-
-def process_planning_markets(cell_value: str):
-    if "," in cell_value:
-        return [item.strip().split()[0] for item in cell_value.split(",")]
-    else:
-        return [cell_value.strip().split()[0]]
-
-
-def process_invoice_price(cell_value: str):
-    return cell_value.strip().split()[0]
+def findInvoicePricebyCountry(country: str, extracted: dict):
+    try:
+        for idx, values in enumerate(extracted.get('Country', [])):
+            if country in values:
+                return extracted['Invoice Average Price'][idx]
+        return None
+    except Exception as e:
+        print(f"❌ Error finding invoice price for {country}: {e}")
+        raise
 
 
 def extract_table_rows(pdf_path: str, page: str = "1"):
@@ -58,10 +42,9 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
             return {}
 
         df = tables[1].df if len(tables) > 1 else tables[0].df
-        df = clean_dataframe(df)
+        df = process_dataframe(df)
 
         extracted = {field: [] for field in FIELDS_TO_EXTRACT}
-
         for r_idx, row in df.iterrows():
             for c_idx, val in row.items():
                 if val not in FIELDS_TO_EXTRACT:
@@ -88,18 +71,7 @@ def extract_table_rows(pdf_path: str, page: str = "1"):
 
     except Exception as e:
         print(f"❌ Error extracting table rows from {pdf_path}: {e}")
-        return {}
-
-
-def findInvoicePricebyCountry(country: str, extracted: dict):
-    try:
-        for idx, values in enumerate(extracted.get('Country', [])):
-            if country in values:
-                return extracted['Invoice Average Price'][idx]
-        return None
-    except Exception as e:
-        print(f"❌ Error finding invoice price for {country}: {e}")
-        return None
+        raise
 
 
 def extractTableValues(pdf_path: str):
@@ -124,4 +96,4 @@ def extractTableValues(pdf_path: str):
 
     except Exception as e:
         print(f"❌ Error extracting table values from {pdf_path}: {e}")
-        return []
+        raise
