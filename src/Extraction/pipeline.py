@@ -23,4 +23,4 @@ def extract_PO_data(pdf_path: str):
 
     except Exception as e:
         print(f"❌ Error extracting PO data from {pdf_path}: {e}")
-        return []
+        raise

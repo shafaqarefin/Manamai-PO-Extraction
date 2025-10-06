@@ -17,7 +17,7 @@ def extract_text(pdf_path: str):
 
     except Exception as e:
         print(f"❌ Error extracting text from {pdf_path}: {e}")
-        return ""
+        raise
 
 
 def extractNonTableValues(text: str):
@@ -44,4 +44,4 @@ def extractNonTableValues(text: str):
 
     except Exception as e:
         print(f"❌ Error extracting non-table fields: {e}")
-        return {}
+        raise

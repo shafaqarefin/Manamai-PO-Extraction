@@ -32,3 +32,4 @@ def save_excel_for_pdf(pdf_id: str, data_list: list, output_dir: str = "output")
 
     except Exception as e:
         print(f"❌ Error saving Excel for PDF ID {pdf_id}: {e}")
+        raise
