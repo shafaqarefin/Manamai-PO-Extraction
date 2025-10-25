@@ -1,4 +1,9 @@
 """Extraction modue for table data from PDFs."""
+from dataclasses import field
+from email import header
+from math import e
+from operator import not_
+from struct import pack
 from turtle import st
 import camelot
 import camelot.core
@@ -29,120 +34,26 @@ VERTICAL_FIELDS = [
 
 ]
 
-HEADER_FIELDS = []
+HEADER_FIELDS = [
+    "Supplier",
+    "Date Placed",
+    "Bulk Order Number",
+    "Buyer",
+    "Department",
+    "Business Unit",
+    "Costing Method",
+    "Freight Forwarder",
+    "Currency",
+    "Payment Terms",
+    "Vendor Style Number",
+    "Style Description",
+    "Origin Port",
+    "Required Handover Date"
+]
 
 FIELDS_TO_EXTRACT = HORIZONTAL_FIELDS + VERTICAL_FIELDS + HEADER_FIELDS
 
-
-def extract_vertical_table_fields(
-    df: pd.DataFrame,
-    location: dict[str, tuple],
-    direction: str = "right",
-    step: int = 1
-) -> dict[str, list]:
-    """
-    Extract vertical table field values from the DataFrame using location coordinates.
-    If a cell is empty, searches in the specified direction with the given step until a non-empty value is found.
-
-    Args:
-        df (pd.DataFrame): The DataFrame to extract from.
-        location (dict): Dictionary mapping field names to (row, col) coordinates.
-        vertical_fields (list): List of vertical field names to extract.
-        direction (str): Direction to search when a cell is empty. Options: 'left', 'right', 'up', 'down'.
-        step (int): Step size for each move in the chosen direction.
-
-    Returns:
-        dict[str, list]: Dictionary with field names as keys and list of extracted values.
-    """
-    extracted = {field: [] for field in VERTICAL_FIELDS}
-
-    for field in VERTICAL_FIELDS:
-        if field not in location:
-            continue
-
-        row, col = location[field]
-        total_rows = df.shape[0]
-        for r in range(row + 1, total_rows):
-            value = df.iat[r, col]
-            if pd.isna(value) or str(value).strip() == "":
-                # fallback search in the specified direction
-                found = None
-                search_row, search_col = r, col
-
-                while True:
-                    if direction.lower() == "left":
-                        search_col -= step
-                        if search_col < 0:
-                            break
-                    elif direction.lower() == "right":
-                        search_col += step
-                        if search_col >= df.shape[1]:
-                            break
-                    elif direction.lower() == "up":
-                        search_row -= step
-                        if search_row < 0:
-                            break
-                    elif direction.lower() == "down":
-                        search_row += step
-                        if search_row >= df.shape[0]:
-                            break
-                    else:
-                        raise ValueError(f"Invalid direction: {direction}")
-
-                    val = df.iat[search_row, search_col]
-                    if not (pd.isna(val) or str(val).strip() == ""):
-                        found = val
-                        break
-
-                if found:
-                    extracted[field].append(str(found).strip())
-                else:
-                    continue  # stop if nothing found in the chosen direction
-            else:
-                extracted[field].append(str(value).strip())
-
-    return extracted
-
-
-def extract_horizontal_table_fields(df: pd.DataFrame, location: dict[str, tuple[int, int]],
-                                    direction: str = "right", step: int = 1) -> dict[str, list]:
-    """
-    Extract horizontal field values from DataFrame using location dict.
-
-    Args:
-        df (pd.DataFrame): The DataFrame to extract from.
-        location (dict): Dict mapping field names to (row, col) tuples.
-        direction (str): "right" (default) or "left".
-        step (int): Number of columns to skip per step (default 1).
-
-    Returns:
-        dict[str, list]: Field name mapped to list of extracted values.
-    """
-    result = {}
-
-    for field, (row, col) in location.items():
-        values = []
-        max_cols = df.shape[1]
-        current_col = col+1
-        while current_col < max_cols and current_col >= 0:
-            cell_value = df.iat[row, current_col]
-
-            # If empty, keep moving in the direction
-            while (pd.isna(cell_value) or str(cell_value).strip() == ""):
-                current_col = current_col + step if direction == "right" else current_col - step
-                if current_col >= max_cols or current_col < 0:
-                    break
-                cell_value = df.iat[row, current_col]
-
-            if current_col >= max_cols or current_col < 0:
-                break  # Stop if we went past the DataFrame
-
-            values.append(cell_value)
-            current_col = current_col + step if direction == "right" else current_col - step
-
-        result[field] = values
-
-    return result
+FINAL_EXTRACTED_VALUE = []
 
 
 def find_field_location(df: pd.DataFrame, field: str) -> tuple[int, int]:
@@ -173,7 +84,7 @@ def find_field_location(df: pd.DataFrame, field: str) -> tuple[int, int]:
         raise
 
 
-def find_location_of_all_fields(df: pd.DataFrame) -> dict[str, tuple[int, int]]:
+def find_location_of_all_fields(df: pd.DataFrame, fields: list[str]) -> dict[str, tuple[int, int]]:
     """
     Find (row, col) coordinates of all fields in FIELDS_TO_EXTRACT within the DataFrame.
     Handles '\n' inside cells and is case-insensitive.
@@ -184,14 +95,15 @@ def find_location_of_all_fields(df: pd.DataFrame) -> dict[str, tuple[int, int]]:
         dict[str, tuple[int, int]]: Mapping of field names to their (row, col) coordinates.
     """
     results = {}
-    for field in FIELDS_TO_EXTRACT:
-        try:
-            row, col = find_field_location(df, field)
-            results[field] = (row, col)
+    for field in fields:
+        if field not in FINAL_EXTRACTED_VALUE:
+            try:
+                row, col = find_field_location(df, field)
+                results[field] = (row, col)
 
-        except LookupError:
-            print(f"❌ Field '{field}' not found in DataFrame.")
-            continue  # Field not found; skip
+            except LookupError:
+                print(f"❌ Field '{field}' not found in DataFrame.")
+                continue  # Field not found; skip
     return results
 
 
@@ -279,13 +191,13 @@ def get_pages_to_process(total_pages: int, page: str) -> list:
         return [int(page)]
 
 
-def extract_data(pdf_path: str, page: str = "all") -> dict[str, dict[str, pd.DataFrame]]:
+def extract_table_data(pdf_path: str, page: str = "all") -> dict[int, dict[str, dict[str, pd.DataFrame]]]:
     """
     Extract data from all specified pages.
 
     Args:
         pdf_path: Path to PDF file
-        page: "all" or specific page number
+        page: "all" or specific page number as string
 
     Returns:
         Dictionary: {page_num: {"Pack 1": {
@@ -396,69 +308,191 @@ def extract_misaligned_columns_values(df: pd.DataFrame, column_pairs: list[tuple
 
     for header_col, data_col in column_pairs:
         header_name = str(df.iat[0, header_col]).strip()
-        print(header_name)
         values = df.iloc[start_row:, data_col]
         clean_values = values.dropna(
         ).loc[lambda x: x != ''].astype(str).tolist()
         extracted[header_name] = clean_values
+        FINAL_EXTRACTED_VALUE.append(header_name)
 
     return extracted
 
 
-def extract_values_from_field(df: pd.DataFrame, field_name: str = "", row=0, col: int | None = None) -> list[str]:
+def extract_all_values_from_field(
+    df: pd.DataFrame,
+    locations: dict[str, tuple[int, int]],
+) -> dict[str, list[str] | str]:
     """
     Extracts all non-empty values under a specific field name in the DataFrame.
 
     Args:
-        df (pd.DataFrame): The DataFrame to extract from.
-        field_name (str): The field name to search for.
+        df: The DataFrame to extract from
+        field_name: The field name to search for (if row/col not provided)
+        row: Starting row index (default: 0)
+        col: Column index (if None, will search for field_name)
+        vertical: If True, extract column-wise; if False, extract row-wise 
+    Returns:
+        List of extracted non-empty values (excluding the field name itself)
+    Raises:
+        ValueError: If field not found or indices out of bounds
+    """
+    extracted_values = {}
+
+    for field_name, (row, col) in locations.items():
+        vertical = field_name in VERTICAL_FIELDS
+        values = extract_value_from_field(
+            df, field_name=field_name, row=row, col=col, vertical=vertical)
+        extracted_values[field_name] = values
+        FINAL_EXTRACTED_VALUE.append(field_name)
+        extracted_values[field_name] = values
+
+    return extracted_values
+
+
+def extract_value_from_field(
+    df: pd.DataFrame,
+    field_name: str = "",
+    row: int = 0,
+    col: int | None = None,
+    vertical: bool = True
+) -> list[str]:
+    """
+    Extracts all non-empty values under a specific field name in the DataFrame.
+
+    Args:
+        df: The DataFrame to extract from
+        field_name: The field name to search for (if row/col not provided)
+        row: Starting row index (default: 0)
+        col: Column index (if None, will search for field_name)
+        vertical: If True, extract column-wise; if False, extract row-wise
 
     Returns:
-        list[str]: List of extracted values.
+        List of extracted non-empty values (excluding the field name itself)
+
+    Raises:
+        ValueError: If field not found or indices out of bounds
     """
     try:
-        if row == 0 and col is None:
+        # Find field location if col not provided
+        if col is None:
+            if not field_name:
+                raise ValueError(
+                    "Either 'col' or 'field_name' must be provided")
             row, col = find_field_location(df, field_name)
 
         total_rows = df.shape[0]
         total_cols = df.shape[1]
-        if (row + 1 >= total_rows):
-            print(f"❌ No rows found under field '{field_name}'")
-            return []
-        if (col >= total_cols):
-            print(
-                f"❌ Column index {col} out of bounds for field '{field_name}'")
-            return []
 
-        clean_list = df.iloc[row:, col] \
-            .dropna() \
-            .loc[lambda x: x != ''] \
-            .astype(str) \
-            .tolist()
+        # Validate indices
+        if row >= total_rows:
+            raise ValueError(
+                f"Row index {row} out of bounds (DataFrame has {total_rows} rows)")
+        if col >= total_cols:
+            raise ValueError(
+                f"Column index {col} out of bounds (DataFrame has {total_cols} columns)")
+
+        # Extract values
+        if vertical:
+            # Check if there are rows below the field
+            if row + 1 >= total_rows:
+                print(
+                    f"⚠️  No rows found under field '{field_name}' at row {row}")
+                return []
+
+            # Extract column values starting from row+1 (skip the field name itself)
+            clean_list = df.iloc[row + 1:, col] \
+                .dropna() \
+                .loc[lambda x: x != ''] \
+                .astype(str) \
+                .loc[lambda x: x.str.strip().str.lower() != 'nan'] \
+                .tolist()
+        else:
+            # Check if there are columns to the right
+            if col + 1 >= total_cols:
+                print(
+                    f"⚠️  No columns found after field '{field_name}' at column {col}")
+                return []
+
+            # Extract row values starting from col+1 (skip the field name itself)
+            clean_list = df.iloc[row, col + 1:] \
+                .dropna() \
+                .loc[lambda x: x != ''] \
+                .astype(str) \
+                .loc[lambda x: x.str.strip().str.lower() != 'nan'] \
+                .tolist()
+
         return clean_list
 
     except KeyError as ke:
-        print(f"❌ Error extracting values for field '{field_name}': {ke}")
+        print(f"❌ KeyError extracting values for field '{field_name}': {ke}")
         raise
+    except Exception as e:
+        print(f"❌ Error extracting values for field '{field_name}': {e}")
+        raise
+
+
+def create_extraction_result(DATA: dict[int, dict[str, dict[str, pd.DataFrame]]]) -> dict[str, dict[str, list[str]]]:
+    """
+    Create final extraction result from DataFrame.
+    Each pack is a separate object with its own fields.
+
+    Args:
+        DATA: {page_num: {"Pack 1": {"horizontal_fields": df, "vertical_fields": df}}}
+
+    Returns:
+        Dictionary: {"Pack 1": {"field_name": [values]}, "Pack 2": {"field_name": [values]}}
+    """
+    result = {}
+
+    for page_num, packs in DATA.items():
+        print(f"\n📄 Page {page_num}: Found {len(packs)} packs")
+
+        for pack_name, fields in packs.items():
+            FINAL_EXTRACTED_VALUE.clear()
+            print(f"\n{'─' * 80}")
+            print(f"📦 Processing {pack_name}")
+            print('─' * 80)
+
+            # Create separate result object for this pack
+            pack_result = {}
+
+            horizontal_df = fields.get('horizontal_fields')
+            vertical_df = fields.get('vertical_fields')
+
+            if horizontal_df is None or vertical_df is None:
+                print(f"⚠️  Skipping {pack_name} due to missing DataFrames")
+                continue
+
+            # Find locations (no global tracking needed)
+            misaligned_vertical_locations = find_misaligned_column_pairs(
+                vertical_df)
+            horizontal_locations = find_location_of_all_fields(
+                horizontal_df, HORIZONTAL_FIELDS)
+            vertical_locations = find_location_of_all_fields(
+                vertical_df, VERTICAL_FIELDS)
+
+            # Extract values
+            misaligned_vertical_values = extract_misaligned_columns_values(
+                vertical_df, misaligned_vertical_locations)
+            horizontal_values = extract_all_values_from_field(
+                horizontal_df, horizontal_locations)
+            vertical_values = extract_all_values_from_field(
+                vertical_df, vertical_locations)
+
+            # Combine into pack result
+            pack_result = {**horizontal_values, **vertical_values, **
+                           misaligned_vertical_values}
+
+            # Store this pack's results
+            result[pack_name] = pack_result
+
+            print(f"✅ {pack_name}: extracted {len(pack_result)} fields")
+
+    return result
 
 
 if __name__ == '__main__':
 
     PDF_PATH = str(get_pdf_directory(
         'data', 'PO SHEET- BEST & LESS.pdf'))
-    DATA_PAGE = extract_data(PDF_PATH, page='0')
-    # print(DATA_PAGE)
-    # display_nested_dict(DATA_PAGE_1, title="Extracted Data from Page 14")
-    horizontal_pd: pd.DataFrame = DATA_PAGE[1]['Pack 1']['horizontal_fields']
-    vertical_pd: pd.DataFrame = DATA_PAGE[1]['Pack 1']['vertical_fields']
-    # print('\n\n')
-    # print(extract_values_from_field(vertical_pd, col=2))
-    # print(extract_values_from_field(vertical_pd, col=6))
-    # print(extract_values_from_field(vertical_pd, col=7))
-    # print(extract_values_from_field(vertical_pd, col=8))
-    # print(vertical_pd)
-    # print(find_field_location(vertical_pd, "Pack Ratio"))
-    COORDS = find_misaligned_column_pairs(vertical_pd)
-    print(COORDS)
-    print(extract_misaligned_columns_values(vertical_pd, COORDS))
-    print('\n\n')
+    DATA_PAGE = extract_table_data(PDF_PATH, page='all')
+    print(create_extraction_result(DATA_PAGE))
