@@ -1,4 +1,5 @@
 """Extraction modue for table data from PDFs."""
+from turtle import st
 import camelot
 import camelot.core
 import fitz
@@ -31,67 +32,6 @@ VERTICAL_FIELDS = [
 HEADER_FIELDS = []
 
 FIELDS_TO_EXTRACT = HORIZONTAL_FIELDS + VERTICAL_FIELDS + HEADER_FIELDS
-
-# def extract_table_rows(pdf_path: str, page: str = "all"):
-# try:
-#     doc = fitz.open(pdf_path)
-
-#     # Determine which pages to process
-#     pages_to_process = range(len(doc)) if str(
-#         page).lower() == "all" else [int(page)]
-#     result = {}
-#     for p in pages_to_process:
-#         page_obj = doc[p]
-#         rect = page_obj.rect  # (x0, y0, x1, y1)
-#         x0, y0, x1, y1 = rect
-
-#         print(f"📄 Reading page {p + 1} with dimensions: {rect}")
-
-#         # Extract tables using the full page coordinates
-#         tables = read_pdf(
-#             pdf_path,
-#             flavor="stream",
-#             pages=str(p + 1),  # Camelot uses 1-based page indexing
-#             table_areas=[f"{x0},{y1},{x1},{y0}"],  # full page
-#         )
-
-#         if not tables:
-#             print(f"❌ No tables found on page {p + 1}")
-#             continue
-
-#         # Find all packs by each page and append to this dictionary below
-#         split_packs_df_by_page = {}
-#         for table_num, table in enumerate(tables, start=1):
-#             df = table.df
-
-#             fixed_df = split_combined_columns_df(df, '\n')
-#             individual_packs = split_by_pack_and_column(
-#                 df)
-#             split_packs_df_by_page[p+1] = individual_packs
-
-#         for key, value in split_packs_df_by_page.items():
-#             print('\n\n\n')
-
-#             for k, v in value.items():
-#                 print(k)
-#                 print('\n')
-#                 # print(drop_empty_columns_rows(v['group']))
-#                 # print('\n')
-#                 # print(extract_horizontal_table_fields(
-#                 #     v['group'], find_field_location(v['group'])))
-#                 # print('\n\n\n')
-#                 # cleaned_df = drop_empty_columns_rows(v['unique'])
-#                 # if (k == "Pack 1"):
-#                 #     print(extract_vertical_table_fields(
-#                 #         v['unique'], find_field_location(v['unique'])))
-#                 print(v['unique'])
-#                 print('\n\n')
-
-#             print('\n\n\n')
-
-# except Exception as e:
-#     print(f"❌ Error extracting table rows from {pdf_path}: {e}")
-#     raise
 
 
 def extract_vertical_table_fields(
@@ -373,17 +313,11 @@ def extract_data(pdf_path: str, page: str = "all") -> dict[str, dict[str, pd.Dat
 
 def find_misaligned_column_pairs(df: pd.DataFrame, header_row: int = 0, start_row: int = 1) -> list[tuple[int, int]]:
     """
-    Identify pairs of misaligned columns using stack logic:
-    - Columns where header_row has a value but rest of column is empty -> push to stack
-    - Columns where header_row is empty but rest of column has values -> pop from stack and pair
-
-    Args:
-        df: pandas DataFrame (generic, any column names)
-        header_row: row index to treat as header (default 0)
-        start_row: row index to start checking rest of the column (default 1)
+    Identify pairs of misaligned columns using stack logic.
+    Handles ANY order of header/data columns.
 
     Returns:
-        List of tuples (header_col_index, data_col_index)
+        List of tuples ALWAYS in format: (header_col_index, data_col_index)
     """
     if df.empty:
         raise ValueError("DataFrame is empty.")
@@ -394,12 +328,12 @@ def find_misaligned_column_pairs(df: pd.DataFrame, header_row: int = 0, start_ro
         raise IndexError(
             f"start_row {start_row} out of bounds for {len(df)} rows.")
 
-    stack = []
+    stack = []  # Store tuples: ('header'|'data', col_idx)
     result_pairs = []
 
     for col_idx in range(df.shape[1]):
         header = df.iloc[header_row, col_idx]
-        print(f"Checking column {col_idx}: header='{header}'")
+
         # Get all non-empty values under the column
         clean_list = df.iloc[start_row:, col_idx] \
             .dropna() \
@@ -412,18 +346,36 @@ def find_misaligned_column_pairs(df: pd.DataFrame, header_row: int = 0, start_ro
         header_empty = pd.isna(header) or str(
             header).strip() in ['', 'nan', '<NA>']
 
-        print(f"header_empty={header_empty}, rest_empty={rest_empty}")
-        print('\n')
-        print(f"clean_list: {clean_list}")
+        # Determine column type
+        if header_empty:  # DATA column
+            column_type = 'data'
+        elif rest_empty:  # HEADER column
+            column_type = 'header'
+        else:
+            # Normal column - skip
+            continue
 
-        # Stack logic
-        if header_empty or rest_empty:
+        # Stack pairing logic
+        if stack:
+            stack_type, stack_col = stack[-1]
 
-            if stack:
-                result_pairs.append((stack.pop(0), col_idx))
+            # Only pair if types are different (header + data)
+            if stack_type != column_type:
+                stack.pop()
+
+                # Always return in (header, data) format
+                if column_type == 'header':
+                    # current is header, stack is data
+                    result_pairs.append((col_idx, stack_col))
+                else:
+                    # stack is header, current is data
+                    result_pairs.append((stack_col, col_idx))
             else:
-                stack.append(col_idx)
-        print('\n\n\n')
+                # Same type - just push current to stack
+                stack.append((column_type, col_idx))
+        else:
+            # Stack empty - push current
+            stack.append((column_type, col_idx))
 
     return result_pairs
 
