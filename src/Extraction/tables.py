@@ -1,17 +1,11 @@
 """Extraction modue for table data from PDFs."""
-from dataclasses import field
-from email import header
-from math import e
-from operator import not_
-from struct import pack
-from turtle import st
 import camelot
 import camelot.core
 import fitz
 from camelot.io import read_pdf
 import pandas as pd
 import numpy as np
-from src.Preprocessing.preprocess import drop_empty_columns_rows, split_by_pack_and_column, split_combined_columns_df
+from src.Preprocessing.preprocess import get_data_by_pattern, split_by_pack_and_column, split_combined_columns_df
 from src.View.view import display_nested_dict
 from utils.pdf import get_pdf_directory, get_pdf_page_dimensions
 
@@ -35,6 +29,7 @@ VERTICAL_FIELDS = [
 ]
 
 HEADER_FIELDS = [
+    "Purchase Order Number",
     "Supplier",
     "Date Placed",
     "Bulk Order Number",
@@ -48,7 +43,8 @@ HEADER_FIELDS = [
     "Vendor Style Number",
     "Style Description",
     "Origin Port",
-    "Required Handover Date"
+    "Required Handover Date",
+    "Total Units", "Total Packs", "Total Cost Price"
 ]
 
 FIELDS_TO_EXTRACT = HORIZONTAL_FIELDS + VERTICAL_FIELDS + HEADER_FIELDS
@@ -136,7 +132,7 @@ def extract_tables_from_page(pdf_path: str, page_num: int) -> camelot.core.Table
     return tables
 
 
-def process_table_to_packs(table) -> dict:
+def process_table_to_packs(table, page_num) -> dict:
     """
     Process a single Camelot table into pack structure.
 
@@ -148,6 +144,7 @@ def process_table_to_packs(table) -> dict:
     """
     df = table.df
     fixed_df = split_combined_columns_df(df, '\n')
+
     individual_packs = split_by_pack_and_column(fixed_df)
 
     return individual_packs
@@ -168,7 +165,7 @@ def extract_page_data(pdf_path: str, page_num: int) -> dict:
 
     page_packs = {}
     for table in tables:
-        packs = process_table_to_packs(table)
+        packs = process_table_to_packs(table, page_num)
         page_packs.update(packs)
 
     return page_packs
@@ -430,7 +427,7 @@ def extract_value_from_field(
         raise
 
 
-def create_extraction_result(DATA: dict[int, dict[str, dict[str, pd.DataFrame]]]) -> dict[str, dict[str, list[str]]]:
+def create_extraction_result(DATA_VALS: dict[int, dict[str, dict[str, pd.DataFrame]]]) -> dict[str, dict[str, list[str]]]:
     """
     Create final extraction result from DataFrame.
     Each pack is a separate object with its own fields.
@@ -443,7 +440,7 @@ def create_extraction_result(DATA: dict[int, dict[str, dict[str, pd.DataFrame]]]
     """
     result = {}
 
-    for page_num, packs in DATA.items():
+    for page_num, packs in DATA_VALS.items():
         print(f"\n📄 Page {page_num}: Found {len(packs)} packs")
 
         for pack_name, fields in packs.items():
@@ -490,9 +487,79 @@ def create_extraction_result(DATA: dict[int, dict[str, dict[str, pd.DataFrame]]]
     return result
 
 
-if __name__ == '__main__':
+def get_header_from_df(pdf_path, page_num=0) -> pd.DataFrame:
+    """
+    Extract header fields from the DataFrame.
 
-    PDF_PATH = str(get_pdf_directory(
-        'data', 'PO SHEET- BEST & LESS.pdf'))
+    Args:
+        df: DataFrame to extract from   
+    Returns:
+        Dictionary of header fields and their values
+    """
+
+    x0, y0, x1, y1 = get_pdf_page_dimensions(pdf_path, page_num)
+
+    print(
+        f"📄 Reading page {page_num + 1} with dimensions: ({x0}, {y0}, {x1}, {y1})")
+
+    tables = read_pdf(
+        pdf_path,
+        flavor="stream",
+        pages=str(page_num + 1),  # Camelot uses 1-based indexing
+        table_areas=[f"{x0},{y1},{x1},{y0}"],
+    )
+
+    if not tables:
+        print(f"❌ No tables found on page {page_num + 1}")
+    for table in tables:
+        df = table.df
+        header = get_data_by_pattern(df, 'Pack 1')
+        return header
+
+
+def extract_header_values(df: pd.DataFrame, coordinates: dict[str, tuple[int, int]]) -> dict[str, str]:
+    """
+    Extract header field values by scanning rightwards from each field location
+    until a non-empty value is found.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the table.
+        coordinates (dict[str, tuple[int, int]]): Mapping of field names to (row, col) positions.
+
+    Returns:
+        dict[str, str]: Field name -> extracted value.
+    """
+    result = {}
+
+    for field, (row, col) in coordinates.items():
+        total_cols = df.shape[1]
+        value = None
+
+        # Start scanning one column to the right
+        for c in range(col + 1, total_cols):
+            candidate = df.iat[row, c]
+            if not (pd.isna(candidate) or str(candidate).strip() == ""):
+                value = str(candidate).strip()
+                break
+
+        # If nothing found, leave empty string
+        result[field] = value if value is not None else ""
+
+    return result
+
+
+def get_pdf_json(PDF_PATH: str) -> tuple[dict[str, str], dict[str, dict[str, list[str]]]]:
     DATA_PAGE = extract_table_data(PDF_PATH, page='all')
-    print(create_extraction_result(DATA_PAGE))
+    header = get_header_from_df(PDF_PATH)
+    header_coords = find_location_of_all_fields(header, HEADER_FIELDS)
+    header_values = extract_header_values(header, header_coords)
+
+    non_header_values = create_extraction_result(DATA_PAGE)
+    return header_values, non_header_values
+
+
+if __name__ == '__main__':
+    PDF_PATH = str(get_pdf_directory(
+        'data', 'W25BN0518_InDC_25052005_PO_709958_BO_315814_V0.pdf'))
+    hv, nhv = get_pdf_json(PDF_PATH)
+    print(hv)

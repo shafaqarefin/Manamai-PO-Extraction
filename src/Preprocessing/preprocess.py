@@ -117,6 +117,53 @@ def split_by_pack_and_column(df: pd.DataFrame, column_field="Buyers Colour") -> 
     return result
 
 
+def get_data_by_pattern(df: pd.DataFrame, pattern: str, mode: str = "before") -> pd.DataFrame:
+    """
+    Get data either before or after the first occurrence of a pattern.
+
+    Args:
+        df: The DataFrame to search
+        pattern: Regex pattern to find (e.g., "Pack 1", r"Pack \d+")
+        mode: "before" returns data before pattern, "after" returns data after pattern (default: "before")
+
+    Returns:
+        pd.DataFrame: Data before or after the pattern match
+
+    Example (mode="before"):
+        If "Pack 1" is at row 5, returns rows 0-4
+
+    Example (mode="after"):
+        If "Pack 1" is at row 5, returns rows 6 onwards (until next match or end)
+    """
+    if mode not in ["before", "after"]:
+        raise ValueError("mode must be 'before' or 'after'")
+
+    # Find first row where first column matches the pattern
+    matches = df[df.iloc[:, 0].astype(str).str.contains(
+        pattern, na=False, regex=True)].index.tolist()
+
+    if not matches:
+        print(f"⚠️  Pattern '{pattern}' not found in DataFrame")
+        return pd.DataFrame()  # Return empty DataFrame
+
+    match_row = matches[0]  # Use first match
+
+    if mode == "before":
+        # Return everything BEFORE the match
+        result_df = df.iloc[:match_row].copy()
+    else:  # mode == "after"
+        # Return everything AFTER the match (until next match or end)
+        start_row = match_row + 1
+
+        # Find next match if exists
+        next_matches = [m for m in matches if m > match_row]
+        end_row = next_matches[0] if next_matches else len(df)
+
+        result_df = drop_empty_columns_rows(df.iloc[start_row:end_row].copy())
+
+    return drop_empty_columns_rows(split_combined_columns_df(result_df, '\n'))
+
+
 def drop_empty_columns_rows(df: pd.DataFrame) -> pd.DataFrame:
     """
     Drops columns and rows that are completely empty (all NaN or empty strings).
