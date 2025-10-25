@@ -1,6 +1,6 @@
 from pathlib import Path
-from src.Excel.excel import save_excel_for_pdf
-from src.Extraction.main import extract_PO_data
+from src.Excel.excel import convert_pdf_data_to_excel
+from src.Extraction.main import extract_po_data
 from utils.pdf import get_pdf_directory
 
 
@@ -12,15 +12,13 @@ def main():
         if not file_path.is_file() or file_path.suffix.lower() != ".pdf":
             continue
 
-        pdf_id = file_path.stem.split('_')[0]
-
         try:
-            excel_data = extract_PO_data(str(file_path))
-            if not excel_data:
+            header, non_header = extract_po_data(str(file_path))
+            if not header or not non_header:
                 print(f"⚠️ No data extracted from {file_path.name}, skipping.")
                 continue
-
-            save_excel_for_pdf(pdf_id, excel_data)
+            file_name = file_path.name
+            convert_pdf_data_to_excel(header, non_header, file_name)
 
         except Exception as e:
             print(f"❌ Failed processing {file_path.name}: {e}")

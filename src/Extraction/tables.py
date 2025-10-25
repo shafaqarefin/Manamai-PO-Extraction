@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from src.Preprocessing.preprocess import get_data_by_pattern, split_by_pack_and_column, split_combined_columns_df
 from src.View.view import display_nested_dict
+from utils.dict import combine_dicts
 from utils.pdf import get_pdf_directory, get_pdf_page_dimensions
 
 HORIZONTAL_FIELDS = [
@@ -476,8 +477,8 @@ def create_extraction_result(DATA_VALS: dict[int, dict[str, dict[str, pd.DataFra
                 vertical_df, vertical_locations)
 
             # Combine into pack result
-            pack_result = {**horizontal_values, **vertical_values, **
-                           misaligned_vertical_values}
+            pack_result = combine_dicts(horizontal_values, vertical_values,
+                                        misaligned_vertical_values)
 
             # Store this pack's results
             result[pack_name] = pack_result
