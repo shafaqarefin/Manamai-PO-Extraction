@@ -1,7 +1,7 @@
 from pathlib import Path
 from src.Excel.createExcel import save_excel_for_pdf
-from src.Extraction.pipeline import extract_PO_data
-from utils.pdfPath import get_pdf_directory
+from src.Extraction.main import extract_PO_data
+from utils.pdf import get_pdf_directory
 
 
 def main():

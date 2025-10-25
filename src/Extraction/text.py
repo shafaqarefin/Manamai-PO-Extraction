@@ -18,30 +18,3 @@ def extract_text(pdf_path: str):
     except Exception as e:
         print(f"❌ Error extracting text from {pdf_path}: {e}")
         raise
-
-
-def extractNonTableValues(text: str):
-    """Extract non-table fields from PDF text."""
-    try:
-        non_table_fields = [
-            "Order No",
-            "Country",
-            "Product Description",
-            "Season",
-            "Type of Construction",
-            "No of Pieces",
-            "Sales Mode",
-        ]
-        extracted_non_table = {}
-
-        for field in non_table_fields:
-            pattern = rf"{re.escape(field)}:\s*(.+?)(?=\n|$)"
-            match = re.search(pattern, text)
-            if match:
-                extracted_non_table[field] = match.group(1)
-
-        return extracted_non_table
-
-    except Exception as e:
-        print(f"❌ Error extracting non-table fields: {e}")
-        raise
