@@ -1,6 +1,7 @@
 """Utility functions for PDF handling."""
 from pathlib import Path
-import fitz  # PyMuPDF
+import fitz
+import pandas as pd  # PyMuPDF
 
 
 def get_pdf_directory(foldername: str, filename='') -> Path:
@@ -44,3 +45,18 @@ def get_pdf_page_dimensions(pdf_path: str, page_num: int) -> tuple:
     rect = page_obj.rect
     doc.close()
     return rect.x0, rect.y0, rect.x1, rect.y1
+
+
+def get_pdf_total_pages(pdf_path: str, ) -> int:
+    """
+    Returns total number of pages of provided pdf
+
+    Args:
+        pdf_path (str): path to directory of pdf
+
+    Returns:
+        int: total pages
+    """
+    doc = fitz.open(pdf_path)
+
+    return len(doc)

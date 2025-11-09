@@ -1,7 +1,18 @@
 """View module for displaying DataFrames."""
+import enum
 import pandas as pd
+import camelot.core
 
+# -----------------------------
+# Pandas display settings
+# -----------------------------
+pd.set_option('display.max_rows', None)      # Show all rows
+pd.set_option('display.max_columns', None)   # Show all columns
+pd.set_option('display.max_colwidth', None)  # Do not truncate column contents
 
+# -----------------------------
+# Display functions
+# -----------------------------
 def display_single_dataframe(df: pd.DataFrame, label: str = "DataFrame",
                              show_shape: bool = True) -> None:
     """
@@ -41,7 +52,7 @@ def display_flat_dict(dataframes: dict, title: str = "DataFrames",
 
 
 def display_nested_dict(data: dict, title: str = "DataFrames",
-                        show_shape: bool = False,) -> None:
+                        show_shape: bool = False) -> None:
     """
     Display DataFrames from nested dictionary.
 
@@ -62,3 +73,16 @@ def display_nested_dict(data: dict, title: str = "DataFrames",
         for sub_key, df in sub_data.items():
             for label, table in df.items():
                 print(table)
+
+
+def display_tables(tables):
+    """
+    Display a list of Camelot tables.
+    
+    Args:
+        tables: list of camelot.Table objects
+    """
+    for idx, table in enumerate(tables):
+        print(f"Table Number {idx + 1}")
+        print(table.df)
+        print('\n\n\n')

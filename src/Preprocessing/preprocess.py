@@ -1,9 +1,10 @@
 """Preprocessing module for DataFrame manipulation."""
 import re
 import pandas as pd
+from utils.field import find_field_location
 
 
-def split_combined_columns_df(df: pd.DataFrame, char: str) -> pd.DataFrame:
+def split_combined_columns_df(df: pd.DataFrame, char: str = '\n') -> pd.DataFrame:
     """
     Splits cells containing a specified character (e.g., newline '\n') across multiple
     new columns, fixing column misalignment typical in table extraction.
@@ -86,7 +87,7 @@ def split_by_pack_and_column(df: pd.DataFrame, column_field="Buyers Colour") -> 
     """
     # Step 1: Find rows where first column contains "Pack X"
     pack_rows = df[df.iloc[:, 0].str.contains(
-        r"Pack \d+", na=False)].index.tolist()
+        r"Page \d+", na=False)].index.tolist()
     result = {}
 
     for idx, start_row in enumerate(pack_rows):
@@ -117,51 +118,69 @@ def split_by_pack_and_column(df: pd.DataFrame, column_field="Buyers Colour") -> 
     return result
 
 
-def get_data_by_pattern(df: pd.DataFrame, pattern: str, mode: str = "before") -> pd.DataFrame:
+def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = None, mode: str = "before") -> pd.DataFrame:
     """
-    Get data either before or after the first occurrence of a pattern.
+    Get data either before, after, or between patterns in a DataFrame.
 
     Args:
-        df: The DataFrame to search
-        pattern: Regex pattern to find (e.g., "Pack 1", r"Pack \d+")
-        mode: "before" returns data before pattern, "after" returns data after pattern (default: "before")
+        df: The DataFrame to search.
+        pattern: First pattern to locate (regex or plain text).
+        pattern2: Optional second pattern (used only if mode='between').
+        mode:
+            - "before": returns data before the first pattern.
+            - "after": returns data after the first pattern.
+            - "between": returns data between pattern and pattern2.
 
     Returns:
-        pd.DataFrame: Data before or after the pattern match
-
-    Example (mode="before"):
-        If "Pack 1" is at row 5, returns rows 0-4
-
-    Example (mode="after"):
-        If "Pack 1" is at row 5, returns rows 6 onwards (until next match or end)
+        pd.DataFrame: Sliced DataFrame based on mode.
     """
-    if mode not in ["before", "after"]:
-        raise ValueError("mode must be 'before' or 'after'")
+    try:
+        if df is None or df.empty:
+            print("⚠️ DataFrame is empty or None.")
+            return pd.DataFrame()
 
-    # Find first row where first column matches the pattern
-    matches = df[df.iloc[:, 0].astype(str).str.contains(
-        pattern, na=False, regex=True)].index.tolist()
+        if mode not in ["before", "after", "between"]:
+            raise ValueError("mode must be 'before', 'after', or 'between'")
 
-    if not matches:
-        print(f"⚠️  Pattern '{pattern}' not found in DataFrame")
-        return pd.DataFrame()  # Return empty DataFrame
+        # Find first pattern location
+        loc1 = find_field_location(df, pattern)
+        if not loc1:
+            print(f"⚠️ Pattern '{pattern}' not found in DataFrame.")
+            return pd.DataFrame()
+        r, c = loc1
 
-    match_row = matches[0]  # Use first match
+        if mode == "before":
+            result_df = df.iloc[:r, :c].copy()
+        elif mode == "after":
+            result_df = df.iloc[r:, c:].copy()
+        else:  # mode == "between"
+            if not pattern2:
+                raise ValueError(
+                    "pattern2 must be provided when mode='between'")
 
-    if mode == "before":
-        # Return everything BEFORE the match
-        result_df = df.iloc[:match_row].copy()
-    else:  # mode == "after"
-        # Return everything AFTER the match (until next match or end)
-        start_row = match_row + 1
+            loc2 = find_field_location(df, pattern2)
+            if not loc2:
+                print(
+                    f"⚠️ Second pattern '{pattern2}' not found in DataFrame.")
+                return pd.DataFrame()
 
-        # Find next match if exists
-        next_matches = [m for m in matches if m > match_row]
-        end_row = next_matches[0] if next_matches else len(df)
+            r1, c1 = loc2
+            # print(r, c)
+            # print(r1, c1)
 
-        result_df = drop_empty_columns_rows(df.iloc[start_row:end_row].copy())
+            # Ensure r2/c2 are after r/c; otherwise return empty
+            # if r2 >= r or c2 > c:
+            #     print(
+            #         f"⚠️ Second pattern '{pattern2}' occurs before first pattern '{pattern}'")
+            #     return pd.DataFrame()
 
-    return drop_empty_columns_rows(split_combined_columns_df(result_df, '\n'))
+            result_df = df.iloc[r:r1, c:].copy()
+
+        return drop_empty_columns_rows(result_df)
+
+    except Exception as e:
+        print(f"❌ Error processing pattern '{pattern}': {e}")
+        return pd.DataFrame()
 
 
 def drop_empty_columns_rows(df: pd.DataFrame) -> pd.DataFrame:
