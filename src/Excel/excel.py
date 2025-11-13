@@ -2,7 +2,7 @@
 import pandas as pd
 from pathlib import Path
 
-from src.Extraction.tables import get_pdf_json
+# from src.Extraction.tables import get_pdf_json
 from utils.dict import combine_dicts, remove_keys_from_dic
 from utils.pdf import get_pdf_directory
 
@@ -169,10 +169,10 @@ def convert_pdf_data_to_excel(hv: dict, nhv: dict, pdf_filename: str, output_dir
 
 if __name__ == '__main__':
     PDF_PATH = str(get_pdf_directory('data', 'PO SHEET- BEST & LESS.pdf'))
-    hv, nhv = get_pdf_json(PDF_PATH)
+    # hv, nhv = get_pdf_json(PDF_PATH)
 
     # Clear and descriptive function name
-    excel_data = convert_pdf_data_to_excel(
-        hv, nhv, 'PO SHEET- BEST & LESS.pdf')
+    # excel_data = convert_pdf_data_to_excel(
+    #     hv, nhv, 'PO SHEET- BEST & LESS.pdf')
 
-    print(f"Processed {len(excel_data)} rows")
+    # print(f"Processed {len(excel_data)} rows")

@@ -6,7 +6,7 @@ import pandas as pd  # PyMuPDF
 
 def get_pdf_directory(foldername: str, filename='') -> Path:
     """Get the path to the PDF directory or a specific file within it."""
-    return Path(__file__).resolve().parents[1] / foldername/filename
+    return Path(__file__).resolve().parents[1] / foldername/'test'/filename
 
 
 def create_pdf_id(data_dir, split_char: str = '_') -> list[str]:

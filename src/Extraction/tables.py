@@ -1,6 +1,6 @@
 """Extraction modue for table data from PDFs."""
-from dataclasses import Field
-from math import fabs
+from calendar import c
+from turtle import color
 import camelot
 import tabula
 import re
@@ -10,16 +10,17 @@ from camelot.io import read_pdf
 from utils.field import find_field_location, find_location_of_all_fields
 import pandas as pd
 import numpy as np
-from src.Preprocessing.preprocess import get_data_by_pattern, split_by_pack_and_column, split_combined_columns_df
+from src.Preprocessing.preprocess import find_specific_section, get_data_by_pattern, split_by_pack_and_column, split_combined_columns_df
 from src.View.view import display_nested_dict
 from utils.dict import combine_dicts
 from utils.pdf import get_pdf_directory, get_pdf_page_dimensions, get_pdf_total_pages
 from src.View.view import display_tables
+from src.Excel.excel import save_excel_for_pdf
 
 
 PO_HORIZONTAL_FIELDS = [
-    "Delivery Addr./Distrib. Center",
     "PO-Date",
+    "Purchase Order No.",
     "Delivery Date",
     "Supplier No.",
     "Incoterms",
@@ -37,17 +38,31 @@ PO_HORIZONTAL_FIELDS = [
     "Total Amount",
     "Page"
 ]
+
+
+MULTI_LINE_PO_HORIZONTAL_FIELDS = [
+    "Delivery Addr./Distrib. Center",
+    "Bank Name",
+    "Account Name",
+    "Customer PO Number",
+    "SAP Order No.",
+
+]
+
+
 # EAN MAP to color values
 PO_VERTICAL_FIELDS = [
+    "Delivery Addr./Distrib. Center",
     "Required  Sustainable Certification",
     "EAN",
     "ARTICLE NO."
+    "Global Management Services Ltd."
 ]
 
 PO_BLOCK_FIELDS = ["Global Management Services Ltd."]
 
 COLOR_HORIZONTAL_FIELDS = [
-    "BRAND",
+    "Brand",
     "SAP Order No.",
     "Order Cycle",
     "Country of Origin",
@@ -62,16 +77,14 @@ COLOR_HORIZONTAL_FIELDS = [
     "Season"
 
 ]
-COLOR_VERTICAL_FIELDS = [
-    "Color Desc.",
-]
+# COLOR_VERTICAL_FIELDS = [
+#     "Color Desc.",
+# ]
 
 # FIELDS_TO_EXTRACT = HORIZONTAL_FIELDS + VERTICAL_FIELDS + HEADER_FIELDS
 
-FINAL_EXTRACTED_VALUE = []
 
-
-def extract_tables_from_page(pdf_path: str, page_num: int,
+def extract_tables_from_page(pdf_path: str, page_num: int, col_tol: int, row_tol: int,
                              use_camelot=True, use_tabula=False) -> camelot.core.TableList | list[pd.DataFrame]:
     """
     Extract all tables from a single page.
@@ -98,7 +111,8 @@ def extract_tables_from_page(pdf_path: str, page_num: int,
                 flavor="stream",
                 pages=str(page_num + 1),
                 table_areas=[f"{x0},{y1},{x1},{y0}"],
-
+                row_tol=row_tol,
+                column_tol=col_tol
 
             )
 
@@ -113,26 +127,6 @@ def extract_tables_from_page(pdf_path: str, page_num: int,
 
     except Exception as e:
         print(f"Error in extraction ")
-
-
-def extract_page_data(pdf_path: str, page_num: int) -> camelot.core.TableList | list[pd.DataFrame]:
-    """
-    Extract all pack data from a single page.
-
-    Args:
-        pdf_path: Path to PDF file
-        page_num: Page number (0-indexed)
-
-    Returns:
-        Dictionary: {"Pack 1": {"group": df, "unique": df}}
-    """
-    tables = extract_tables_from_page(pdf_path, page_num, use_tabula=False)
-
-    # page_packs = {}
-    # for table in tables:
-    #     # packs = process_table_to_packs(table, page_num)
-    #     page_packs.update(table)
-    return tables
 
 
 def get_pages_to_process(total_pages: int, page: str) -> list:
@@ -152,7 +146,7 @@ def get_pages_to_process(total_pages: int, page: str) -> list:
         return [int(page)]
 
 
-def extract_table_data(pdf_path: str, page: str = "all") -> dict[int, dict[str, dict[str, pd.DataFrame]]]:
+def extract_table_data(pdf_path: str, page: str = "all", col_tol: int = 100, row_tol: int = 10) -> dict[int, dict[str, dict[str, pd.DataFrame]]]:
     """
     Extract data from all specified pages.
 
@@ -173,7 +167,8 @@ def extract_table_data(pdf_path: str, page: str = "all") -> dict[int, dict[str, 
 
     for page_num in pages_to_process:
         try:
-            page_data = extract_page_data(pdf_path, page_num)
+            page_data = extract_tables_from_page(
+                pdf_path, page_num, col_tol=col_tol, row_tol=row_tol)
             if page_data:  # Only add if data was found
                 all_pages_data[page_num + 1] = page_data  # Store as 1-indexed
         except KeyError as e:
@@ -185,14 +180,14 @@ def extract_table_data(pdf_path: str, page: str = "all") -> dict[int, dict[str, 
 
 def find_misaligned_column_pairs(df: pd.DataFrame, header_row: int = 0, start_row: int = 1) -> list[tuple[int, int]]:
     """
-    Identify pairs of misaligned columns using stack logic.
-    Handles ANY order of header/data columns.
-
-    Returns:
-        List of tuples ALWAYS in format: (header_col_index, data_col_index)
+    Identify header/data column pairs based on stack logic:
+      - Header row not empty and rest empty → push to stack
+      - Header row empty and rest has data → pop from stack and form pair
+    Returns list of (header_col_index, data_col_index)
     """
     if df.empty:
         raise ValueError("DataFrame is empty.")
+
     if not (0 <= header_row < len(df)):
         raise IndexError(
             f"header_row {header_row} out of bounds for {len(df)} rows.")
@@ -200,59 +195,35 @@ def find_misaligned_column_pairs(df: pd.DataFrame, header_row: int = 0, start_ro
         raise IndexError(
             f"start_row {start_row} out of bounds for {len(df)} rows.")
 
-    stack = []  # Store tuples: ('header'|'data', col_idx)
+    # Normalize DataFrame
+    df = df.fillna('<NA>').astype(str)
+
+    stack = []
     result_pairs = []
 
     for col_idx in range(df.shape[1]):
-        header = df.iloc[header_row, col_idx]
+        header_val = df.iloc[header_row, col_idx].strip()
+        col_data = df.iloc[start_row:, col_idx].astype(str).str.strip()
+        has_data = any(v not in ['', 'nan', '<NA>'] for v in col_data)
+        rest_empty = not has_data
+        header_empty = header_val in ['', 'nan', '<NA>']
 
-        # Get all non-empty values under the column
-        clean_list = df.iloc[start_row:, col_idx] \
-            .dropna() \
-            .loc[lambda x: x != ''] \
-            .astype(str) \
-            .loc[lambda x: x.str.lower() != 'nan'] \
-            .tolist()
+        # Push header column onto stack if header not empty and rest empty
+        if not header_empty and rest_empty:
+            stack.append(col_idx)
 
-        rest_empty = len(clean_list) == 0
-        header_empty = pd.isna(header) or str(
-            header).strip() in ['', 'nan', '<NA>']
+        # Pop from stack if header empty and rest has data
+        elif header_empty and has_data:
+            if stack:
+                header_col = stack.pop()
+                result_pairs.append((header_col, col_idx))
 
-        # Determine column type
-        if header_empty:  # DATA column
-            column_type = 'data'
-        elif rest_empty:  # HEADER column
-            column_type = 'header'
-        else:
-            # Normal column - skip
-            continue
-
-        # Stack pairing logic
-        if stack:
-            stack_type, stack_col = stack[-1]
-
-            # Only pair if types are different (header + data)
-            if stack_type != column_type:
-                stack.pop()
-
-                # Always return in (header, data) format
-                if column_type == 'header':
-                    # current is header, stack is data
-                    result_pairs.append((col_idx, stack_col))
-                else:
-                    # stack is header, current is data
-                    result_pairs.append((stack_col, col_idx))
-            else:
-                # Same type - just push current to stack
-                stack.append((column_type, col_idx))
-        else:
-            # Stack empty - push current
-            stack.append((column_type, col_idx))
+        # Otherwise ignore column
 
     return result_pairs
 
 
-def extract_misaligned_columns_values(df: pd.DataFrame, column_pairs: list[tuple[int, int]], start_row: int = 1) -> dict[str, list[str]]:
+def extract_misaligned_columns_values(df: pd.DataFrame, column_pairs: list[tuple[int, int]], start_row: int = 1, as_list: bool = False) -> dict[str, list[str]]:
     """_summary_
     Extract values from misaligned column pairs.
 
@@ -313,62 +284,86 @@ def extract_value_from_field(
     row: int,
     col: int,
     vertical: bool = False,
-
-) -> str:
+    multiline: bool = False,
+    pattern: str = r":\s*(.*)",
+    is_list: bool = False,
+) -> str | list:
     """
     Extracts the immediate value that comes after ':' for a given field.
-    If multi_line=True, it concatenates next `step_size` rows (vertical fields only)
-    into a single string.
+    - If multiline=True and vertical=False, concatenates multiple rows horizontally.
+    - If vertical=True, extracts downward column values (ignores multiline).
+    - If is_list=True, returns a list of values instead of a single string.
     """
     try:
         total_rows, total_cols = df.shape
 
-        # Validate field position
+        # Validate position
         if row >= total_rows or col >= total_cols:
-            return ""
+            return [] if is_list else ""
 
-        final_value = ""
+        final_value = []
 
-        while row < total_rows:
-            if not vertical:
-                row_values = df.iloc[row, col:].dropna().astype(str)
-            else:
-                row_values = df.iloc[row+1:, col].dropna().astype(str)
-
+        # --- CASE 1: vertical extraction (ignores multiline) ---
+        if vertical:
+            row_values = df.iloc[row + 1:, col].dropna().astype(str)
             row_values = [v.strip()
                           for v in row_values if v.strip() and v.lower() != "nan"]
 
-            # Extract after ':' if present, else full string
             processed_pieces = []
             for cell in row_values:
-                match = re.search(r":\s*(.*)", cell)
+                match = re.search(pattern, cell)
                 piece = match.group(1).strip() if match else cell
-                # Remove inner whitespace of each word but keep words separated
-                piece = " ".join(w.replace(" ", "") for w in piece.split())
-                processed_pieces.append(piece)
+                processed_pieces.append(" ".join(piece.split()))
 
-            # Join columns of this row with single space
-            row_string = " ".join(processed_pieces)
+            final_value = processed_pieces
 
-            # Concatenate rows directly (no extra space added between rows)
-            final_value += row_string
+        # --- CASE 2: multiline horizontal extraction ---
+        elif multiline:
+            # Loop through all remaining rows
+            for i in range(row, total_rows):
+                row_values = df.iloc[i, col:].dropna().astype(str)
+                row_values = [v.strip()
+                              for v in row_values if v.strip() and v.lower() != "nan"]
 
-            # Check next row's first column
-            if row + 1 < len(df):
-                next_first_col = df.iat[row + 1, 0]
-                if pd.isna(next_first_col):
-                    row += 1
-                    continue
-                else:
-                    break
-            row += 1
+                processed_pieces = []
+                for cell in row_values:
+                    match = re.search(pattern, cell)
+                    piece = match.group(1).strip() if match else cell
+                    processed_pieces.append(" ".join(piece.split()))
+
+                final_value.extend(processed_pieces)
+
+        # --- CASE 3: single-line horizontal extraction ---
+        else:
+            row_values = df.iloc[row, col:].dropna().astype(str)
+            row_values = [v.strip()
+                          for v in row_values if v.strip() and v.lower() != "nan"]
+
+            processed_pieces = []
+            for cell in row_values:
+                match = re.search(pattern, cell)
+                piece = match.group(1).strip() if match else cell
+                processed_pieces.append(" ".join(piece.split()))
+
+            final_value = processed_pieces
+
+        # ✅ FINAL NORMALIZATION
+        if is_list:
+            # Always return a list
+            if not isinstance(final_value, list):
+                final_value = [final_value]
+        else:
+            # Always flatten to a single string
+            if isinstance(final_value, list):
+                final_value = " ".join(str(v).strip()
+                                       for v in final_value if str(v).strip())
 
         return final_value
 
     except Exception as e:
-        print(
-            f"❌ Error extracting row {row}, col {col}: {e}")
-        raise
+        # print(f"❌ Error extracting row {row}, col {col}: {e}")
+        # raise
+        pass
 
 
 def create_extraction_result(DATA_VALS: dict[int, dict[str, dict[str, pd.DataFrame]]]) -> dict[str, dict[str, list[str]]]:
@@ -522,7 +517,7 @@ def find_page_with_field(pages:  dict[int, dict[str, dict[str, pd.DataFrame]]], 
     return fields_page_directory
 
 
-def table_in_multiple_pages(start_page: int, end_page: int, pdf_path: str) -> pd.DataFrame:
+def table_in_multiple_pages(start_page: int, end_page: int, pdf_path: str) -> tuple[pd.DataFrame, str]:
     import pandas as pd
     import camelot
 
@@ -546,6 +541,10 @@ def table_in_multiple_pages(start_page: int, end_page: int, pdf_path: str) -> pd
                 section_df = get_data_by_pattern(
                     processed_df, "EAN", "Registered Office", mode='between'
                 )
+                a_r1, a_c1 = find_field_location(processed_df, "ARTICLE NO.")
+                article_number = " ".join(
+                    processed_df.iloc[a_r1+1:, a_c1].astype(str).to_list()).strip()
+
                 combined_df = section_df.copy()  # Initialize combined_df with first section
             else:
                 # For other pages, extract rows between 'Page' and 'Bank Name'
@@ -557,118 +556,347 @@ def table_in_multiple_pages(start_page: int, end_page: int, pdf_path: str) -> pd
                 combined_df = pd.concat(
                     [combined_df, section_df], axis=0, ignore_index=True)
 
-    return combined_df
+    return combined_df, article_number
+
+
+def color_code_map(TABLE_SECTION: pd.DataFrame, header_row: int = 0, start_row: int = 1, col: int = 0) -> dict:
+    """
+    Converts a table of colors, sizes, and quantities into a nested dictionary
+    keyed by color code.
+
+    Args:
+        TABLE_SECTION: DataFrame or list of lists containing the table.
+        header_row: Row index for size headers.
+        start_row: Row index where data starts.
+        col: Column index where the color column starts.
+
+    Returns:
+        dict: {color_code: {"color": color_name, "size": {
+            size_header: value}, "total_qty": total}}
+    """
+    result_dict = {}
+
+    # Extract size headers
+    size_headers = [v.strip() for v in extract_value_from_field(
+        TABLE_SECTION, row=header_row, col=col, is_list=True) if v.strip() and v.lower() != "nan"]
+    size_headers = size_headers[1:-1]  # skip color column and total_qty column
+
+    # Iterate over data rows
+    for i in range(start_row, len(TABLE_SECTION)):
+        row_values = extract_value_from_field(
+            TABLE_SECTION, row=i, col=col, is_list=True)
+        row_values = [v.strip()
+                      for v in row_values if v.strip() and v.lower() != "nan"]
+
+        if not row_values:
+            continue  # skip empty rows
+
+        color_field = row_values[0]
+        total_qty = row_values[-1].replace(',', '')  # last column is total qty
+
+        # Extract color name and code
+        m = re.match(r"(.*)\s+\((\d+)\)", color_field)
+        if m:
+            color_name = m.group(1).strip()
+            code = m.group(2)
+        else:
+            color_name = color_field.strip()
+            code = None  # fallback if no code
+
+        # Build sizes dictionary
+        sizes = {}
+        for idx, size_header in enumerate(size_headers):
+            if idx + 1 < len(row_values) - 1:
+                sizes[size_header] = row_values[idx + 1].replace(',', '')
+
+        # Use color code as key
+        if code:
+            result_dict[code] = {
+                "color": color_name,
+                "size": sizes,
+                "total_qty": total_qty
+            }
+
+    return result_dict
+
+
+def flatten_color_size_data(ean_color_list, color_data_dict):
+    """
+    Combine EAN-color mapping with detailed color-size info and flatten it.
+
+    Parameters:
+        ean_color_list (list of dict): [{'EAN': '4069...', 'Color Code': '36'}, ...]
+        color_data_dict (dict): {'36': {'color': 'Black', 'size': {...}, 'total_qty': '4504'}, ...}
+
+    Returns:
+        list of dict: Flattened entries like
+            [
+                {'EAN': '4069...', 'Color Code': '36', 'Color': 'Black',
+                    'Size': 'S', 'Qty': '270', 'Total Qty': '4504'},
+                ...
+            ]
+    """
+    flattened = []
+    for entry in ean_color_list:
+        ean = entry.get('EAN')
+        code = str(entry.get('Color Code', '')).strip()
+
+        if code not in color_data_dict:
+            continue  # skip if no matching color data
+
+        color_info = color_data_dict[code]
+        color_name = color_info.get('color', '')
+        size_map = color_info.get('size', {})
+        total_qty = color_info.get('total_qty', '')
+
+        for size, qty in size_map.items():
+            flattened.append({
+                'EAN': ean,
+                'Color Code': code,
+                'Color': color_name,
+                'Size': size,
+                'Qty': qty,
+                'Total Qty': total_qty
+            })
+
+    return flattened
+
+
+def extract_common_po_fields(po_data: dict[int, dict[str, dict[str, pd.DataFrame]]]) -> dict[str, str]:
+    common_fields_value = {}
+    pages_to_avoid = find_page_with_field(
+        po_data, fields=[
+            "Label",
+            "Customer PO Number",
+            "Type of Freight",
+            "Types of Hangers",
+            "Term of Payment",
+            "Total Number of Pieces",
+            "Total Amount",
+            "Required Sustainable Certification",
+            "EAN"
+        ]
+    )
+    # PO COMMON DATA
+    for page, tables in po_data.items():
+        for table in tables:
+            df = table.df
+            processed_df = split_combined_columns_df(df, '\n')
+
+            top_section = get_data_by_pattern(
+                processed_df, 'Delivery Addr./Distrib. Center', mode='before')
+            BANK_NAME = find_specific_section(
+                processed_df, 'Bank Name', until_field="SWIFT Code", row_wise=True, col_wise=True, includes=False)
+            SWIFT_CODE = find_specific_section(
+                processed_df, 'SWIFT Code', until_field="Account Name", row_wise=True, col_wise=True, includes=False)
+            ACCOUNT_NAME = find_specific_section(processed_df, 'Account Name',
+                                                 until_field="Account No", row_wise=True, col_wise=True, includes=False)
+            ACCOUNT_NO = find_specific_section(
+                processed_df, 'Account No', row_wise=True, col_wise=True, includes=False)
+
+            HEADER = find_specific_section(
+                processed_df, from_field="PO-Date", until_field="Page", row_wise=True, col_wise=True, includes=False)
+            LABEL_SECTION = find_specific_section(
+                processed_df, from_field="Label", to_field="DESCR.", row_wise=True, col_wise=False, includes=False)
+            freight = get_data_by_pattern(
+                processed_df, "Type of Freight", " Production only Allowed at", mode='between')
+            certifcation_section = get_data_by_pattern(
+                processed_df, "Required  Sustainable Certification", "Registered Office", mode='between')
+            DELIVERY_ADDR_SECTION = find_specific_section(
+                processed_df, 'Delivery Addr./Distrib. Center', 'PO-Date', 'Page', col_wise=True, row_wise=True, includes=False)
+
+            TOTAL_AMOUNT_SECTION = find_specific_section(
+                processed_df, from_field='Total Number of Pieces', until_field='Total Amount', col_wise=False, row_wise=True, includes=True)
+
+            OFFICE_ADDRESS_SECTION = find_specific_section(
+                processed_df, 'Global Management Services Ltd.', 'Registered Office', col_wise=False, row_wise=True, includes=True)
+            print(HEADER)
+            sections1 = [HEADER, BANK_NAME, SWIFT_CODE, ACCOUNT_NAME,
+                         ACCOUNT_NO, top_section, DELIVERY_ADDR_SECTION]
+            sections2 = [LABEL_SECTION, freight,
+                         certifcation_section, TOTAL_AMOUNT_SECTION]
+
+            if page - 1 not in pages_to_avoid.keys():
+                sections_to_process = sections1
+            else:
+                sections_to_process = sections2
+
+            for section in sections_to_process:
+                # Process horizontal fields
+                horizontal_locations = find_location_of_all_fields(
+                    section, PO_HORIZONTAL_FIELDS)
+                for field, location in horizontal_locations.items():
+                    # 🔧 FIX HERE
+                    if field not in common_fields_value or not common_fields_value.get(field):
+                        row, col = location
+                        value = extract_value_from_field(
+                            section,
+                            row,
+                            col,
+                            vertical=False,
+                            is_list=False,
+                            multiline=field in MULTI_LINE_PO_HORIZONTAL_FIELDS
+                        )
+                        print(field, ': ', value)
+
+                        if field.lower() == "type of freight":
+                            value = value.split(" ")[0] if value else value
+
+                        if field.lower() == "PO-Date":
+                            value = value.split(" ")[-1] if value else value
+                        if field.lower() == "Terms of Payment".lower():
+                            value = " ".join(value.strip().split(" ")[:-1])
+
+                        common_fields_value[field] = value
+
+                # Process vertical fields
+                vertical_locations = find_location_of_all_fields(
+                    section, PO_VERTICAL_FIELDS)
+                for field, location in vertical_locations.items():
+                    # 🔧 FIX HERE TOO
+                    if field not in common_fields_value or not common_fields_value.get(field):
+                        row, col = location
+                        value = extract_value_from_field(
+                            section, row, col, vertical=True)
+                        common_fields_value[field] = value
+
+    return common_fields_value
+
+
+def extract_color_size(color_size_data):
+    """
+    Extract color size information and common color-related values from table data.
+
+    Parameters:
+        color_size_data (dict): A mapping of page -> list of table objects (each having a .df DataFrame)
+
+    Returns:
+        tuple: (color_size_common_values, color_size_info)
+            - color_size_common_values: dict of extracted horizontal fields
+            - color_size_info: dict or list from color_code_map()
+    """
+    color_size_common_values = {}
+
+    for page, tables in color_size_data.items():
+        for table in tables:
+            df = table.df
+            processed_df = split_combined_columns_df(df, '\n')
+
+            # --- Identify key header sections ---
+            LEFT_SECTION_HEADER_TOP = find_specific_section(
+                processed_df, 'Brand', 'Article', "Order Cycle",
+                col_wise=True, row_wise=True, includes=False
+            )
+            LEFT_SECTION_HEADER_BOTTOM = find_specific_section(
+                processed_df, 'Order Cycle', 'Season', "Factory",
+                col_wise=True, row_wise=True, includes=False
+            )
+            MIDDLE_SECTION_HEADER = find_specific_section(
+                processed_df, from_field='Article', to_field='Article No.', until_field="Season",
+                col_wise=True, row_wise=True, includes=False
+            )
+            LAST_SECTION_HEADER = find_specific_section(
+                processed_df, 'Article No.', 'Supplier No.',
+                col_wise=False, row_wise=True, includes=True
+            )
+            TABLE_SECTION = find_specific_section(
+                processed_df, 'Color Desc.',
+                col_wise=False, row_wise=True, includes=False
+            )
+            SEASON = find_specific_section(
+                processed_df, from_field='Season', to_field='Year',
+                until_field='Supplier', col_wise=True, row_wise=True, includes=False)
+
+            sections_to_process = [
+                LEFT_SECTION_HEADER_BOTTOM,
+                LEFT_SECTION_HEADER_TOP,
+                MIDDLE_SECTION_HEADER,
+                LAST_SECTION_HEADER,
+                SEASON
+            ]
+            print(SEASON)
+
+            # --- Extract color-size table info ---
+            row, col = find_field_location(TABLE_SECTION, "Color Desc.")
+            color_size_info = color_code_map(
+                TABLE_SECTION, header_row=row, start_row=row + 1, col=col
+            )
+
+            # --- Extract other color-related fields ---
+            for section in sections_to_process:
+                horizontal_locations = find_location_of_all_fields(
+                    section, COLOR_HORIZONTAL_FIELDS
+                )
+
+                for field, location in horizontal_locations.items():
+                    if field not in color_size_common_values:
+                        row, col = location
+                        pattern = f"{field}\s*\s*(.*)"
+                        value = extract_value_from_field(
+                            section,
+                            row,
+                            col,
+                            vertical=False,
+                            multiline=field in MULTI_LINE_PO_HORIZONTAL_FIELDS,
+                            pattern=pattern
+                        )
+                        if field.lower() == "season":
+                            value = value.split(" ")[0] if value else value
+                        color_size_common_values[field] = value
+
+    return color_size_common_values, color_size_info
 
 
 if __name__ == '__main__':
-    PDF_PATH = str(get_pdf_directory(
-        'data', 'PO10034143-V1_GHK-M000040894_Redacted.pdf'))
+    PO_PDF_PATH = str(get_pdf_directory(
+        'data', 'PO10034465-V1_GHK-M000041254.pdf'))
     # hv, nhv = get_pdf_json(PDF_PATH)
-    # last_page = get_pdf_total_pages(PDF_PATH)
-    # pages = extract_table_data(PDF_PATH, 'all')
+    last_page = get_pdf_total_pages(PO_PDF_PATH)
 
-    # pages_to_avoid = find_page_with_field(
-    #     pages, fields=[
-    #         "Label",
-    #         "Customer PO Number",
-    #         "Type of Freight",
-    #         "Types of Hangers",
-    #         "Term of Payment",
-    #         "Total Number of Pieces",
-    #         "Total Amount",
-    #         "Required Sustainable Certification",
-    #         "EAN"
-    #     ]
-    # )
-    # ean_page = find_page_with_field(
-    #     pages, fields=[
-    #         "EAN"
-    #     ], page_only=True
-    # )
-    # print(ean_page)
-    # print(last_page)
-    table_ean = table_in_multiple_pages(48, 49, pdf_path=PDF_PATH)
+    COLOR_SIZE_PDF_PATH = str(get_pdf_directory(
+        'data', 'color_size_dialog_tusaha_20241230_050715.pdf'))
+
+    po_data = extract_table_data(PO_PDF_PATH, 'all')
+
+    ean_page = find_page_with_field(
+        po_data, fields=[
+            "EAN"
+        ], page_only=True
+    )
+
+    table_ean, article_no = table_in_multiple_pages(
+        ean_page, last_page, pdf_path=PO_PDF_PATH)
+
     rows = table_ean.shape[0]
+    temporary_dict: dict[str, list[dict[str, str]]] = {}
+    list_of_ean_objects = []
+    for r in range(1, rows):
+        info = table_ean.iloc[r, :].astype(str).to_list()
+        val = info[1].split(" ", 1)
+        EAN = info[0]
+        Color_Code = val[0]
+        Color = val[1]
+        Size = info[2]
+        ean_object = {
+            "EAN": EAN,
+            "Color Code": Color_Code,
+        }
+        list_of_ean_objects.append(ean_object)
 
-    for r in range(rows):
-        info = table_ean.iloc[r, :].astype(str).to_string()
-        print(info)
-        print('\n\n')
+        # temporary_dict[article_no] = list_of_ean_objects
 
-    # for page, tables in pages.items():
+    common_po_values = extract_common_po_fields(po_data)
+    print(common_po_values)
 
-    #     # print(f"Page {page}")
-    #     print('\n\n')
-    #     for table in tables:
-    #         df = table.df
-    #         processed_df = split_combined_columns_df(df, '\n')
-    # split_df=get_data_by_pattern(processed_df,'Page',mode='after')
+    color_size_data = extract_table_data(
+        COLOR_SIZE_PDF_PATH, page='all', col_tol=0, row_tol=1)
+    color_common_value, color_size_info = extract_color_size(color_size_data)
+    color_ean_size_info = flatten_color_size_data(
+        list_of_ean_objects, color_size_info)
+    json = []
+    for info in color_ean_size_info:
+        combined_object = combine_dicts(
+            common_po_values, color_common_value, info)
+        json.append(combined_object)
 
-    # footer = get_data_by_pattern(
-    #     processed_df, 'Bank Name', mode='after')
-
-    # header = get_data_by_pattern(
-    #     processed_df, "PO-Date", "Page", mode="between")
-
-    # article = get_data_by_pattern(
-    #     processed_df, "ARTICLE", "DESCR.", mode='between')
-
-    # freight = get_data_by_pattern(
-    #     processed_df, "Type of Freight", " Production only Allowed at", mode='between')
-
-    # certifcation_section = get_data_by_pattern(
-    #     processed_df, "Required  Sustainable Certification", "Registered Office", mode='between')
-
-    # ean_section = get_data_by_pattern(
-    #     processed_df, "EAN", "Registered Office", mode='between')
-    # sections1 = [footer, header]
-    # sections2 = [article, freight, certifcation_section]
-
-    # for section in sections:
-    # if page-1 not in pages_to_avoid.keys():
-    #     print(f"Page {page}")
-    #     print("\n\n")
-
-    #     for section in sections1:
-    #         horizontal_locations = find_location_of_all_fields(
-    #             section, PO_HORIZONTAL_FIELDS)
-
-    #         for field, location in horizontal_locations.items():
-
-    #             row, col = location
-    #             print(field)
-    #             print(extract_value_from_field(
-    #                 section, row, col, vertical=False))
-    #             print('\n\n')
-
-    #         print("\n\n")
-    # else:
-    # print(f"Page {page}")
-    # print("\n\n")
-
-    # for section in sections2:
-    #     horizontal_locations = find_location_of_all_fields(
-    #         section, PO_HORIZONTAL_FIELDS)
-    #     vertical_locations = find_location_of_all_fields(
-    #         section, PO_VERTICAL_FIELDS)
-
-    #     for field, location in vertical_locations.items():
-
-    #         row, col = location
-    #         print(field)
-    #         print('\n\n')
-
-    #         print(extract_value_from_field(
-    #             section, row, col, vertical=True))
-    #         print('\n\n')
-    #     for field, location in horizontal_locations.items():
-
-    #         row, col = location
-    #         print(field)
-    #         print('\n\n')
-
-    #         print(extract_value_from_field(
-    #             section, row, col, vertical=False))
-    #         print('\n\n')
-
-    #     print("\n\n")
+    save_excel_for_pdf('PO10034465-V1_GHK-M000041254', json)

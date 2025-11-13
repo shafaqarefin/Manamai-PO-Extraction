@@ -118,7 +118,7 @@ def split_by_pack_and_column(df: pd.DataFrame, column_field="Buyers Colour") -> 
     return result
 
 
-def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = None, mode: str = "before") -> pd.DataFrame:
+def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = None, mode: str = "before", quiet: bool = True) -> pd.DataFrame:
     """
     Get data either before, after, or between patterns in a DataFrame.
 
@@ -136,7 +136,8 @@ def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = N
     """
     try:
         if df is None or df.empty:
-            print("⚠️ DataFrame is empty or None.")
+            if not quiet:
+                print("⚠️ DataFrame is empty or None.")
             return pd.DataFrame()
 
         if mode not in ["before", "after", "between"]:
@@ -145,7 +146,8 @@ def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = N
         # Find first pattern location
         loc1 = find_field_location(df, pattern)
         if not loc1:
-            print(f"⚠️ Pattern '{pattern}' not found in DataFrame.")
+            if not quiet:
+                print(f"⚠️ Pattern '{pattern}' not found in DataFrame.")
             return pd.DataFrame()
         r, c = loc1
 
@@ -160,8 +162,9 @@ def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = N
 
             loc2 = find_field_location(df, pattern2)
             if not loc2:
-                print(
-                    f"⚠️ Second pattern '{pattern2}' not found in DataFrame.")
+                if not quiet:
+                    print(
+                        f"⚠️ Second pattern '{pattern2}' not found in DataFrame.")
                 return pd.DataFrame()
 
             r1, c1 = loc2
@@ -180,6 +183,87 @@ def get_data_by_pattern(df: pd.DataFrame, pattern: str, pattern2: str | None = N
 
     except Exception as e:
         print(f"❌ Error processing pattern '{pattern}': {e}")
+        return pd.DataFrame()
+
+
+def find_specific_section(
+    df: pd.DataFrame,
+    from_field: str,
+    to_field: str = None,
+    until_field: str = None,
+    includes: bool = False,
+    row_wise: bool = True,
+    col_wise: bool = False
+) -> pd.DataFrame:
+    """
+    Extracts a section of the DataFrame between given fields.
+
+    Rules:
+      - If row_wise only: takes rows between from_field and to_field (or till end).
+      - If col_wise only: takes cols between from_field and to_field (or till end).
+      - If both row_wise and col_wise: 
+          uses from_field row → until_field row,
+          and from_field col → to_field col.
+      - If includes=True, includes the end row/column (+1 offset).
+      - until_field only matters if both row_wise and col_wise are True.
+    """
+
+    try:
+        if df is None or df.empty:
+            print("⚠️ DataFrame is empty or None.")
+            return pd.DataFrame()
+
+        # Locate all fields
+        r_from, c_from = find_field_location(df, from_field) or (None, None)
+        r_to, c_to = find_field_location(
+            df, to_field) if to_field else (None, None)
+        r_until, c_until = find_field_location(
+            df, until_field) if until_field else (None, None)
+
+        if r_from is None or c_from is None:
+            print(f"⚠️ 'From' field '{from_field}' not found.")
+            return pd.DataFrame()
+
+        # --- CASE 1: ROW-WISE ONLY ---
+        if row_wise and not col_wise:
+            start_row = r_from
+            end_row = r_to + 1 if (includes and r_to is not None) else r_to
+            if end_row is None:
+                end_row = len(df)
+            section = df.iloc[start_row:end_row, :]
+
+        # --- CASE 2: COL-WISE ONLY ---
+        elif col_wise and not row_wise:
+            start_col = c_from
+            end_col = c_to + 1 if (includes and c_to is not None) else c_to
+            if end_col is None:
+                end_col = len(df.columns)
+            section = df.iloc[:, start_col:end_col]
+
+        # --- CASE 3: BOTH ROW + COL ---
+        elif row_wise and col_wise:
+            start_row = r_from
+            end_row = r_until + \
+                1 if (includes and r_until is not None) else r_until
+            if end_row is None:
+                end_row = len(df)
+
+            start_col = c_from
+            end_col = c_to + 1 if (includes and c_to is not None) else c_to
+            if end_col is None:
+                end_col = len(df.columns)
+
+            section = df.iloc[start_row:end_row, start_col:end_col]
+
+        else:
+            print("⚠️ Either row_wise or col_wise must be True.")
+            return pd.DataFrame()
+
+        return drop_empty_columns_rows(section)
+
+    except Exception as e:
+        print(
+            f"❌ Error extracting section from '{from_field}' to '{to_field}': {e}")
         return pd.DataFrame()
 
 
