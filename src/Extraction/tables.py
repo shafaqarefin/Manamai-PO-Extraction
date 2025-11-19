@@ -518,8 +518,6 @@ def find_page_with_field(pages:  dict[int, dict[str, dict[str, pd.DataFrame]]], 
 
 
 def table_in_multiple_pages(start_page: int, end_page: int, pdf_path: str) -> tuple[pd.DataFrame, str]:
-    import pandas as pd
-    import camelot
 
     combined_df = pd.DataFrame()  # Initialize empty DF to stack sections
 
@@ -710,7 +708,6 @@ def extract_common_po_fields(po_data: dict[int, dict[str, dict[str, pd.DataFrame
 
             OFFICE_ADDRESS_SECTION = find_specific_section(
                 processed_df, 'Global Management Services Ltd.', 'Registered Office', col_wise=False, row_wise=True, includes=True)
-            print(HEADER)
             sections1 = [HEADER, BANK_NAME, SWIFT_CODE, ACCOUNT_NAME,
                          ACCOUNT_NO, top_section, DELIVERY_ADDR_SECTION]
             sections2 = [LABEL_SECTION, freight,
@@ -814,7 +811,6 @@ def extract_color_size(color_size_data):
                 LAST_SECTION_HEADER,
                 SEASON
             ]
-            print(SEASON)
 
             # --- Extract color-size table info ---
             row, col = find_field_location(TABLE_SECTION, "Color Desc.")
@@ -868,25 +864,27 @@ if __name__ == '__main__':
         ean_page, last_page, pdf_path=PO_PDF_PATH)
 
     rows = table_ean.shape[0]
-    temporary_dict: dict[str, list[dict[str, str]]] = {}
+    temporary_dict = {}
     list_of_ean_objects = []
+
     for r in range(1, rows):
         info = table_ean.iloc[r, :].astype(str).to_list()
         val = info[1].split(" ", 1)
         EAN = info[0]
         Color_Code = val[0]
-        Color = val[1]
-        Size = info[2]
-        ean_object = {
-            "EAN": EAN,
-            "Color Code": Color_Code,
-        }
-        list_of_ean_objects.append(ean_object)
+
+        # Check if an object with the same Color_Code already exists
+        if not any(obj["Color Code"] == Color_Code for obj in list_of_ean_objects):
+            ean_object = {
+                "EAN": EAN,
+                "Color Code": Color_Code
+            }
+            list_of_ean_objects.append(ean_object)
 
         # temporary_dict[article_no] = list_of_ean_objects
 
+    print(list_of_ean_objects)
     common_po_values = extract_common_po_fields(po_data)
-    print(common_po_values)
 
     color_size_data = extract_table_data(
         COLOR_SIZE_PDF_PATH, page='all', col_tol=0, row_tol=1)
