@@ -76,7 +76,7 @@ uv sync
 ```
 **After successful installation,run command in current terminal to start excel creation for any pdf in the data folder**
 ```bash
-uv run -m src.main
+uv run -m src.Extraction.tables
 ```
 **Check newly created output folder in root directory which contains all excel files saved using the first id of each pdf in data folder**
 
