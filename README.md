@@ -6,8 +6,7 @@ A Python project for extracting and normalizing structured data from purchase-or
 
 ## 🚀 Features
 - Parse PDF tables using **Camelot**.
-- Normalize delivery dates to `YYYY-MM-DD`.
-- Extract fields such as **Country**, **Planning Markets**, **Invoice Average Price**, etc.
+- Extract fields such defined.
 - Output clean, analysis-ready Excel/CSV data.
 
 ---
@@ -56,6 +55,21 @@ git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git .
 deactivate
 rm -rf .venv
 ```
+
+**Create virtual environment**
+```bash
+uv venv .venv
+```
+
+**Run this command to activate virtual environment**
+```bash
+source .venv/scripts/activate
+```
+**For macOS/Linux
+```bash
+source .venv/bin/activate
+```
+
 **Run this command to install dependencies**
 ```bash
 uv sync
