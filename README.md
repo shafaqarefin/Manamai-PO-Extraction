@@ -48,13 +48,26 @@ mkdir project_name && cd project_name
 ```
 **In your current project directory clone project**
 ```bash
-git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git .
+git clone -b BestAndLess --single-branch https://github.com/shafaqarefin/Manamai-PO-Extraction.git
+
 
 ```
 **IF AND ONLY IF any other virtual enviroments are active deactivate them and remove them**
 ```bash
 deactivate
 rm -rf .venv
+```
+**Run this command to create virtual environment**
+```bash
+uv venv .venv
+```
+**Run this command to activate virtual environment for Windows**
+```bash
+source .venv/Scripts/activate
+```
+**Run this command to activate virtual environment for Mac/Linux**
+```bash
+source .venv/bin/activate
 ```
 **Run this command to install dependencies**
 ```bash

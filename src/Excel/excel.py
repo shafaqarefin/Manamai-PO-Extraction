@@ -97,7 +97,8 @@ def flatten_result_to_individual_objects(values: dict[str, dict[str, list[str]]]
 
 def convert_to_excel_format(flattened_data: dict, end_dict: dict) -> list[dict]:
     """
-    NEW FUNCTION: Converts your original nested structure to flat Excel rows
+    Converts nested pack structure into flat Excel rows.
+    Pack-level totals are repeated for ALL rows in the same pack.
     """
     all_rows = []
 
@@ -106,19 +107,16 @@ def convert_to_excel_format(flattened_data: dict, end_dict: dict) -> list[dict]:
         total_qty = pack_data.get("Total Qty", "")
         individual_packs = pack_data.get("Individual Packs", [])
 
-        for i, individual_pack in enumerate(individual_packs):
+        for individual_pack in individual_packs:
             row_data = individual_pack.copy()
 
-            # Add pack-level totals ONLY to the first row of each pack
-            if i == 0:
-                row_data["Total Pack Ratio"] = total_pack_ratio
-                row_data["Total Qty"] = total_qty
-            else:
-                row_data["Total Pack Ratio"] = ""
-                row_data["Total Qty"] = ""
+            # ALWAYS attach pack-level totals
+            row_data["Total Pack Ratio"] = total_pack_ratio
+            row_data["Total Qty"] = total_qty
 
-            # Add the end_dict values
+            # Attach document-level totals
             row_data.update(end_dict)
+
             all_rows.append(row_data)
 
     return all_rows
