@@ -612,6 +612,23 @@ def extract_common_po_fields(po_data: dict[int, dict[str, dict[str, pd.DataFrame
     return common_fields_value
 
 
+def build_ean_objects(table_ean: pd.DataFrame) -> list[dict]:
+    rows = table_ean.shape[0]
+    objects = []
+
+    for r in range(1, rows):
+        info = table_ean.iloc[r, :].astype(str).to_list()
+        val = info[1].split(" ", 1)
+
+        objects.append({
+            "EAN": info[0],
+            "Color Code": val[0],
+            "Size": info[2]
+        })
+
+    return objects
+
+
 def extract_color_size(color_size_data):
     """
     Extract color size information and common color-related values from table data.
@@ -694,60 +711,77 @@ def extract_color_size(color_size_data):
 
     return color_size_common_values, color_size_info
 
+# RUN THIS COMMAND ONLY
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
+
+    # --- FOLDER CONTAINING PURCHASAE ORDER AND COLOR SIZE PDF PATHS ---
     PO_PDF_PATH = str(get_pdf_directory(
-        'data', subfolder='test1', filename='PO10034465-V1_GHK-M000041254.pdf'))
-    # hv, nhv = get_pdf_json(PDF_PATH)
-    last_page = get_pdf_total_pages(PO_PDF_PATH)
+        foldername='data',
+        subfolder='test1',
+        filename='PO10034465-V1_GHK-M000041254.pdf'
+    ))
 
-    po_data = extract_table_data(PO_PDF_PATH, 'all')
-    print(po_data)
+    COLOR_SIZE_PDF_PATH = str(get_pdf_directory(
+        foldername='data',
+        subfolder='test1',
+        filename='color_size_dialog_tusaha_20241230_050715.pdf'
+    ))
+
+    # --- PO DATA EXTRACTION ---
+    po_data = extract_table_data(PO_PDF_PATH, page='all')
+
+    # --- FIND PAGE CONTAINING EAN ---
     ean_page = find_page_with_field(
-        po_data, fields=[
-            "EAN"
-        ], page_only=True
+        po_data,
+        fields=["EAN"],
+        page_only=True
     )
 
+    last_page = get_pdf_total_pages(PO_PDF_PATH)
+
+    # --- EXTRACT EAN TABLE ACROSS PAGES ---
     table_ean, article_no = table_in_multiple_pages(
-        ean_page, last_page, pdf_path=PO_PDF_PATH)
+        ean_page,
+        last_page,
+        pdf_path=PO_PDF_PATH
+    )
 
-    rows = table_ean.shape[0]
-    temporary_dict = {}
-    list_of_ean_objects = []
-    print(table_ean)
-    for r in range(1, rows):
-        info = table_ean.iloc[r, :].astype(str).to_list()
-        val = info[1].split(" ", 1)
-        EAN = info[0]
-        size = info[2]
-        Color_Code = val[0]
+    # --- BUILD EAN OBJECTS ---
+    list_of_ean_objects = build_ean_objects(table_ean)
 
-        # Check if an object with the same Color_Code already exists
-       # Unique identifier = EAN + Color Code
-        list_of_ean_objects.append({
-            "EAN": EAN,
-            "Color Code": Color_Code,
-            "Size": size
-        })
-
-    # temporary_dict[article_no] = list_of_ean_objects
-
-    print(list_of_ean_objects)
+    # --- EXTRACT COMMON PO VALUES ---
     common_po_values = extract_common_po_fields(po_data)
-    # print(common_po_values)
-    COLOR_SIZE_PDF_PATH = str(get_pdf_directory(
-        foldername='data', subfolder='test1', filename='color_size_dialog_tusaha_20241230_050715.pdf'))
 
+    # --- COLOR / SIZE DATA EXTRACTION ---
     color_size_data = extract_table_data(
-        COLOR_SIZE_PDF_PATH, page='all', row_tol=1, col_tol=0)
+        COLOR_SIZE_PDF_PATH,
+        page='all',
+        row_tol=1,
+        col_tol=0
+    )
+
     color_common_value, color_size_info = extract_color_size(color_size_data)
+
+    # --- MERGE COLOR + PO DATA ---
     color_ean_size_info = flatten_color_size_data(
-        list_of_ean_objects, color_size_info)
-    json = []
+        list_of_ean_objects,
+        color_size_info
+    )
+
+    # --- FINAL JSON OUTPUT ---
+    final_json = []
     for info in color_ean_size_info:
         combined_object = combine_dicts(
-            common_po_values, color_common_value, info)
-        json.append(combined_object)
+            common_po_values,
+            color_common_value,
+            info
+        )
+        final_json.append(combined_object)
 
-    save_excel_for_pdf('PO10034465-V1_GHK-M000041254', json)
+    # --- SAVE EXCEL ---
+    save_excel_for_pdf(
+        'PO10034465-V1_GHK-M000041254',
+        final_json
+    )
