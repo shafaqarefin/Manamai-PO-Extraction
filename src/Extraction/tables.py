@@ -711,26 +711,15 @@ def extract_color_size(color_size_data):
 
     return color_size_common_values, color_size_info
 
-# RUN THIS COMMAND ONLY
 
-
-if __name__ == "__main__":
-
-    # --- FOLDER CONTAINING PURCHASAE ORDER AND COLOR SIZE PDF PATHS ---
-    PO_PDF_PATH = str(get_pdf_directory(
-        foldername='data',
-        subfolder='test1',
-        filename='PO10034465-V1_GHK-M000041254.pdf'
-    ))
-
-    COLOR_SIZE_PDF_PATH = str(get_pdf_directory(
-        foldername='data',
-        subfolder='test1',
-        filename='color_size_dialog_tusaha_20241230_050715.pdf'
-    ))
+def generate_final_po_json(po_pdf_path: str, color_size_pdf_path: str) -> list[dict]:
+    """
+    Given PO PDF path and Color/Size PDF path,
+    returns the final merged JSON output.
+    """
 
     # --- PO DATA EXTRACTION ---
-    po_data = extract_table_data(PO_PDF_PATH, page='all')
+    po_data = extract_table_data(po_pdf_path, page='all')
 
     # --- FIND PAGE CONTAINING EAN ---
     ean_page = find_page_with_field(
@@ -739,13 +728,13 @@ if __name__ == "__main__":
         page_only=True
     )
 
-    last_page = get_pdf_total_pages(PO_PDF_PATH)
+    last_page = get_pdf_total_pages(po_pdf_path)
 
     # --- EXTRACT EAN TABLE ACROSS PAGES ---
     table_ean, article_no = table_in_multiple_pages(
         ean_page,
         last_page,
-        pdf_path=PO_PDF_PATH
+        pdf_path=po_pdf_path
     )
 
     # --- BUILD EAN OBJECTS ---
@@ -756,7 +745,7 @@ if __name__ == "__main__":
 
     # --- COLOR / SIZE DATA EXTRACTION ---
     color_size_data = extract_table_data(
-        COLOR_SIZE_PDF_PATH,
+        color_size_pdf_path,
         page='all',
         row_tol=1,
         col_tol=0
@@ -780,7 +769,32 @@ if __name__ == "__main__":
         )
         final_json.append(combined_object)
 
-    # --- SAVE EXCEL ---
+    return final_json
+
+
+if __name__ == "__main__":
+
+    # PROVIDE YOUR Purchase Order path
+    PO_PDF_PATH = str(get_pdf_directory(
+        foldername='data',
+        subfolder='test1',
+        filename='PO10034465-V1_GHK-M000041254.pdf'
+    ))
+
+    # PROVIDE YOUR COLOR SIZE PATH
+    COLOR_SIZE_PDF_PATH = str(get_pdf_directory(
+        foldername='data',
+        subfolder='test1',
+        filename='color_size_dialog_tusaha_20241230_050715.pdf'
+    ))
+
+    # THIS FUNCTION WILL PROVIDE JSON FORMAT ALL ROWS
+    final_json = generate_final_po_json(
+        PO_PDF_PATH,
+        COLOR_SIZE_PDF_PATH
+    )
+
+    # THIS FUNCTION SAVES TO EXCEL,YOU CAN SET NAME OF DOCUMENT DYNAMICALLY AS FIRST PARAMTER IS THE FILENEAME HERE
     save_excel_for_pdf(
         'PO10034465-V1_GHK-M000041254',
         final_json

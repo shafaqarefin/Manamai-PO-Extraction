@@ -6,7 +6,8 @@ A Python project for extracting and normalizing structured data from purchase-or
 
 ## 🚀 Features
 - Parse PDF tables using **Camelot**.
-- Extract fields such defined.
+- Normalize delivery dates to `YYYY-MM-DD`.
+- Extract fields such as **Country**, **Planning Markets**, **Invoice Average Price**, etc.
 - Output clean, analysis-ready Excel/CSV data.
 
 ---
@@ -47,7 +48,8 @@ mkdir project_name && cd project_name
 ```
 **In your current project directory clone project**
 ```bash
-git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git .
+git clone -b BestAndLess --single-branch https://github.com/shafaqarefin/Manamai-PO-Extraction.git
+
 
 ```
 **IF AND ONLY IF any other virtual enviroments are active deactivate them and remove them**
@@ -55,21 +57,20 @@ git clone https://github.com/shafaqarefin/pdfExtractionandExcel.git .
 deactivate
 rm -rf .venv
 ```
-
-**Create virtual environment**
+**Run this command to create virtual environment**
 ```bash
 uv venv .venv
 ```
-
-**Run this command to activate virtual environment**
+**Run this command to activate virtual environment for Windows**
 ```bash
-source .venv/scripts/activate
+source .venv/Scripts/activate
 ```
-**For macOS/Linux
+**OR**
+
+**Run this command to activate virtual environment for Mac/Linux**
 ```bash
 source .venv/bin/activate
 ```
-
 **Run this command to install dependencies**
 ```bash
 uv sync
@@ -78,6 +79,12 @@ uv sync
 ```bash
 uv run -m src.Extraction.tables
 ```
+Notes: 
+**Run the main function in src/main.py  if you want to the whole program to run
+
+**To get in JSON format simply run convert_to_excel_format funciton which wil return a list of dictionaries where each dictionary contains each json
+
+
 **Check newly created output folder in root directory which contains all excel files saved using the first id of each pdf in data folder**
 
 
