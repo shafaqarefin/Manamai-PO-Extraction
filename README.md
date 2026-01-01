@@ -65,6 +65,8 @@ uv venv .venv
 ```bash
 source .venv/Scripts/activate
 ```
+**OR**
+
 **Run this command to activate virtual environment for Mac/Linux**
 ```bash
 source .venv/bin/activate
