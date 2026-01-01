@@ -80,9 +80,9 @@ uv sync
 uv run -m src.Extraction.tables
 ```
 Notes: 
-**Run the main function in src/main.py  if you want to the whole program to run
+**Run the main function in src/Extraction/tables.py  if you want to the whole program to run
 
-**To get in JSON format simply run convert_to_excel_format funciton which wil return a list of dictionaries where each dictionary contains each json
+**To get in JSON format simply run generate_final_po_json provided with po pdf path and color size pdf path and the  function   wil return a list of dictionaries where each dictionary contains each row information
 
 
 **Check newly created output folder in root directory which contains all excel files saved using the first id of each pdf in data folder**
