@@ -79,6 +79,12 @@ uv sync
 ```bash
 uv run -m src.main
 ```
+Notes: 
+**Run the main function in src/main.py  if you want to the whole program to run
+
+**To get in JSON format simply run convert_to_excel_format funciton which wil return a list of dictionaries where each dictionary contains each json
+
+
 **Check newly created output folder in root directory which contains all excel files saved using the first id of each pdf in data folder**
 
 
