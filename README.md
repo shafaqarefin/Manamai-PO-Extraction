@@ -48,7 +48,7 @@ mkdir project_name && cd project_name
 ```
 **In your current project directory clone project**
 ```bash
-git clone -b BestAndLess --single-branch https://github.com/shafaqarefin/Manamai-PO-Extraction.git
+git clone -b P&C --single-branch https://github.com/shafaqarefin/Manamai-PO-Extraction.git
 
 
 ```
