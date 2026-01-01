@@ -697,7 +697,7 @@ def extract_color_size(color_size_data):
 
 if __name__ == '__main__':
     PO_PDF_PATH = str(get_pdf_directory(
-        'data', subfolder='test2', filename='PO10034143-V1_GHK-M000040894_Redacted.pdf'))
+        'data', subfolder='test1', filename='PO10034465-V1_GHK-M000041254.pdf'))
     # hv, nhv = get_pdf_json(PDF_PATH)
     last_page = get_pdf_total_pages(PO_PDF_PATH)
 
@@ -737,10 +737,10 @@ if __name__ == '__main__':
     common_po_values = extract_common_po_fields(po_data)
     # print(common_po_values)
     COLOR_SIZE_PDF_PATH = str(get_pdf_directory(
-        foldername='data', subfolder='test2', filename='color_size_dialog_tusaha_20241230_053111 (1).pdf'))
+        foldername='data', subfolder='test1', filename='color_size_dialog_tusaha_20241230_050715.pdf'))
 
     color_size_data = extract_table_data(
-        COLOR_SIZE_PDF_PATH, page='all', row_tol=1)
+        COLOR_SIZE_PDF_PATH, page='all', row_tol=1, col_tol=0)
     color_common_value, color_size_info = extract_color_size(color_size_data)
     color_ean_size_info = flatten_color_size_data(
         list_of_ean_objects, color_size_info)
